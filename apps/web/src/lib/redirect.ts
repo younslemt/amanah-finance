@@ -10,7 +10,6 @@ export function safeRedirectPath(input: string | null | undefined): string {
   if (!input) return DEFAULT_AFTER_LOGIN;
   let value: string;
   try { value = decodeURIComponent(input); } catch { return DEFAULT_AFTER_LOGIN; }
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\\]/.test(value)) return DEFAULT_AFTER_LOGIN;
   if (!value.startsWith('/') || value.startsWith('//')) return DEFAULT_AFTER_LOGIN;
   const path = value.split(/[?#]/)[0];
