@@ -13,7 +13,7 @@ export default defineConfig({
     // En CI, l'application est déjà compilée par l'étape précédente.
     command: process.env.CI ? 'pnpm start' : 'pnpm build && pnpm start',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // en CI : serveur démarré et vérifié par l'étape précédente
     env: { NEXT_PUBLIC_APP_MODE: 'demo' },
     timeout: 180_000,
   },

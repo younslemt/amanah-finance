@@ -91,9 +91,7 @@ jobs:
           echo "HTTP /dashboard : $code"; test "$code" = "200"
           curl -sI http://localhost:3000/dashboard | grep -i "content-security-policy"
           curl -s http://localhost:3000/dashboard | grep -q "Mode démonstration"
-          # Arrêter le serveur Next.js lui-même (pas seulement le lanceur pnpm) pour libérer le port 3000
-          pkill -f "next start" || true
-          for i in $(seq 1 10); do curl -s -o /dev/null http://localhost:3000 || break; sleep 1; done
+          # Le serveur reste démarré : les tests Playwright l'utilisent (reuseExistingServer).
 
       - name: Navigateur Playwright
         run: pnpm --filter @amanah/web exec playwright install --with-deps chromium
