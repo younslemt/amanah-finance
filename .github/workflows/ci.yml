@@ -59,6 +59,13 @@ jobs:
           name: pnpm-lock
           path: pnpm-lock.yaml
 
+      - name: Afficher le pnpm-lock.yaml généré (pour le versionner)
+        if: steps.install.outputs.lockfile == 'generated'
+        run: |
+          echo "=====DEBUT-PNPM-LOCK====="
+          base64 -w0 pnpm-lock.yaml; echo
+          echo "=====FIN-PNPM-LOCK====="
+
       - name: Règles de dépendance entre couches
         run: pnpm check:boundaries
 
