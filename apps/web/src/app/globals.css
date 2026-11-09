@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Design system — jetons (identité : src/config/brand.ts)
+   Vert émeraude profond, blanc cassé, doré discret, gris clair.
+   ========================================================================= */
+/* Les valeurs viennent de src/config/brand.ts (variables --brand-* posées sur <html>).
+   Les valeurs de repli ne servent que si l'injection échoue. */
+@theme inline {
+  --color-primary-950: var(--brand-primary-950, #06251c);
+  --color-primary-900: var(--brand-primary-900, #0b3d2e);
+  --color-primary-800: var(--brand-primary-800, #0f4d3a);
+  --color-primary-700: var(--brand-primary-700, #155f48);
+  --color-primary-600: var(--brand-primary-600, #1e7658);
+  --color-primary-100: var(--brand-primary-100, #dcebe4);
+  --color-primary-50:  var(--brand-primary-50, #eef5f1);
+  --color-accent-600:  var(--brand-accent-600, #8a6a30);
+  --color-accent-500:  var(--brand-accent-500, #b8924a);
+  --color-accent-100:  var(--brand-accent-100, #f3ead9);
+
+  --color-ivory:     var(--brand-background, #faf8f3);
+  --color-paper:     var(--brand-surface, #ffffff);
+  --color-ink:       var(--brand-ink, #1b1f1d);
+  --color-ink-muted: var(--brand-ink-muted, #5a625d);
+  --color-line:      var(--brand-line, #e6e3dc);
+  --color-mist:      var(--brand-mist, #f1efea);
+
+  --color-positive:  #1e7658;
+  --color-warning:   #8a5a12;
+  --color-critical:  #a33a2c;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(11 61 46 / 0.04), 0 4px 16px rgb(11 61 46 / 0.04);
+}
+
+@layer base {
+  html { background: var(--color-ivory); color: var(--color-ink); }
+  body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
+
+/* Motif géométrique très discret (étoile à huit branches), réservé aux en-têtes */
+@utility pattern-khatam {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23b8924a' stroke-opacity='0.14' stroke-width='1'%3E%3Crect x='14' y='14' width='20' height='20'/%3E%3Crect x='14' y='14' width='20' height='20' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");
+}

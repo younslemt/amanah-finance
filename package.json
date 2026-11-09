@@ -1,0 +1,27 @@
+{
+  "name": "amanah-finance",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @amanah/web dev",
+    "build": "pnpm --filter @amanah/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm check:boundaries && pnpm -r test",
+    "test:e2e": "pnpm --filter @amanah/web test:e2e",
+    "test:db": "./scripts/test-db.sh",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "test:ci": "pnpm check:boundaries && pnpm -r test:ci",
+    "verify": "pnpm check:boundaries && pnpm typecheck && pnpm lint && pnpm -r test && pnpm build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "@tailwindcss/oxide"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@amanah/engines",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Moteurs financiers et de conformité (Zakat, purification, budget, objectifs, CSV). TypeScript pur, sans dépendance.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:node": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/vitest-engines.xml",
+    "lint": "echo \"lint: couvert par le typecheck strict\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
