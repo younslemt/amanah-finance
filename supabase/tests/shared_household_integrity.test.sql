@@ -11,6 +11,8 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000b1', 'hana@example.test'),
   ('00000000-0000-0000-0000-0000000000b2', 'idris@example.test'),
   ('00000000-0000-0000-0000-0000000000b3', 'jamal@example.test');
+insert into public.consents (user_id, kind, granted, document_version, document_hash)
+  select id, 'special_category', true, 'test', repeat('a', 64) from auth.users where id in ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000b3');  -- article 9 (lot 0, Sprint 2)
 select set_config('t.h1', (select id::text from public.households where created_by = '00000000-0000-0000-0000-0000000000b1'), false);
 select set_config('t.h3', (select id::text from public.households where created_by = '00000000-0000-0000-0000-0000000000b3'), false);
 -- Idris rejoint le foyer de Hana (son foyer individuel est retiré)
@@ -97,6 +99,13 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000b1';
 insert into public.consents (user_id, kind, granted, document_version, document_hash) values (auth.uid(), 'terms', true, 'v', repeat('c', 64));
 insert into public.zakat_calculations (household_id, ruleset_id, ruleset_version, engine_version, as_of, inputs, result, zakatable_cents, zakat_due_cents, status, pending_reasons)
 values (current_setting('t.h1')::uuid, 'amanah-zakat', '1.0.0', 't', date '2026-11-10', '{}', '{}', 1, 0, 'to_determine', '{hawl_start_unknown}');
+reset role;
+-- Calcul d'Idris (autre membre), qui doit survivre à la suppression du compte de Hana
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000b2';
+insert into public.zakat_calculations (household_id, ruleset_id, ruleset_version, engine_version, as_of, inputs, result, zakatable_cents, zakat_due_cents, status, pending_reasons)
+values (current_setting('t.h1')::uuid, 'amanah-zakat', '1.0.0', 't', date '2026-11-10', '{}', '{}', 2, 0, 'to_determine', '{hawl_start_unknown}');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000b1';
 select public.delete_my_account();
 reset role;
 
@@ -117,8 +126,10 @@ begin
   insert into _r10 values ('consentements de la personne supprimés', n = 0, n || '');
   select count(*) into n from public.audit_log where actor_id = '00000000-0000-0000-0000-0000000000b1';
   insert into _r10 values ('journal : auteur anonymisé', n = 0, n || ' trace(s) nominative(s)');
-  select count(*) into n from public.zakat_calculations where created_by = '00000000-0000-0000-0000-0000000000b1';
-  insert into _r10 values ('calcul de Zakat conservé, auteur anonymisé', n = 0 and exists (select 1 from public.zakat_calculations where household_id = current_setting('t.h1')::uuid), n || ' calcul(s) nominatif(s)');
+  select count(*) into n from public.zakat_calculations where owner_id = '00000000-0000-0000-0000-0000000000b1' or created_by = '00000000-0000-0000-0000-0000000000b1';
+  insert into _r10 values ('calcul de Zakat de la personne effacé (article 9, Sprint 2)', n = 0, n || ' calcul(s)');
+  select count(*) into n from public.zakat_calculations where owner_id = '00000000-0000-0000-0000-0000000000b2';
+  insert into _r10 values ('calcul de Zakat de l''autre membre conservé', n = 1, n || ' calcul(s)');
 end $$;
 
 -- Le calcul figé reste non modifiable autrement que par anonymisation

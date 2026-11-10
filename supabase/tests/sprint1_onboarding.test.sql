@@ -110,6 +110,12 @@ select pg_temp.expect('budget mensuel accepté', format(
 select pg_temp.expect('budget dans le foyer d''autrui refusé', format(
   $q$insert into public.budgets (household_id, month, category_slug, limit_cents) values (%L, date '2026-11-01', 'alimentation', 1)$q$,
   current_setting('t.hg')), false);
+select pg_temp.expect('objectif Hajj refusé sans consentement article 9 (retiré plus haut)', format(
+  $q$insert into public.goals (household_id, kind, name, target_cents, target_date)
+     values (%L, 'hajj', 'Hajj', 900000, date '2028-05-01')$q$, current_setting('t.hf')), false);
+select pg_temp.expect('consentement article 9 accordé à nouveau', $q$
+  insert into public.consents (user_id, kind, granted, document_version, document_hash)
+  values (auth.uid(), 'special_category', true, '2026-11-brouillon', repeat('c', 64))$q$, true);
 select pg_temp.expect('objectif Hajj avec capacité mensuelle accepté', format(
   $q$insert into public.goals (household_id, kind, name, target_cents, target_date, monthly_capacity_cents)
      values (%L, 'hajj', 'Hajj', 900000, date '2028-05-01', 40000)$q$, current_setting('t.hf')), true);

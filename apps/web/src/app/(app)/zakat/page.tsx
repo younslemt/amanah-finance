@@ -4,12 +4,17 @@ import { getSnapshot } from '@/lib/data';
 import { formatCents, formatDate } from '@/lib/format';
 import { interpolate } from '@/lib/i18n';
 import { fr } from '@/messages/fr';
+import { religiousAccess } from '@/lib/supabase/session';
+import { ReligiousGate } from '@/components/religious-gate';
 
 export const metadata: Metadata = { title: fr.zakat.title };
 
 const statusTone = { to_determine: 'warning', below_nisab: 'neutral', hawl_incomplete: 'neutral', due: 'positive' } as const;
 
 export default async function ZakatPage() {
+  if (!(await religiousAccess()).enabled) {
+    return (<><PageHeader title={fr.zakat.title} /><ReligiousGate feature={fr.zakat.title} next="/zakat" /></>);
+  }
   const { zakat: z } = await getSnapshot();
   const t = fr.zakat;
   const rate = `${(z.ratePer100k / 1000).toLocaleString('fr-BE', { maximumFractionDigits: 3 })} %`;
