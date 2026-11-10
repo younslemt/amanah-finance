@@ -47,7 +47,9 @@ begin
   end if;
 
   insert into public.import_batches (household_id, account_id, source, file_name, csv_profile, row_count, error_count)
-  values (p_household_id, p_account_id, p_source, left(p_file_name, 200), p_profile, n_rows, greatest(coalesce(p_error_count, 0), 0))
+  -- Lignes lues = lignes valides transmises + lignes illisibles écartées avant l'appel
+  values (p_household_id, p_account_id, p_source, left(p_file_name, 200), p_profile,
+          n_rows + greatest(coalesce(p_error_count, 0), 0), greatest(coalesce(p_error_count, 0), 0))
   returning id into bid;
 
   with src as (

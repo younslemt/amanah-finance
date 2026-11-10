@@ -49,8 +49,9 @@ export async function confirmImport(_p: FormState, fd: FormData): Promise<FormSt
   if (!uuid.test(accountId)) return formError('Import invalide : recommencez.');
   const prepared = await prepareImport(ctx, { accountId, profile: String(fd.get('profile') ?? ''), text: String(fd.get('csv') ?? '') });
   if (!prepared.ok) return formError(prepared.message);
-  const rows = toImportPayload(prepared.preview.toInsert);
-  if (rows.length === 0) return formError('Aucune nouvelle opération à importer : toutes sont déjà enregistrées.');
+  // Doublons connus inclus : la base les écarte elle-même et les compte (journal du lot exact)
+  const rows = toImportPayload([...prepared.preview.toInsert, ...prepared.preview.duplicates]);
+  if (prepared.preview.toInsert.length === 0) return formError('Aucune nouvelle opération à importer : toutes sont déjà enregistrées.');
   const { data, error } = await ctx.supabase.rpc('import_transactions', {
     p_household_id: ctx.householdId, p_account_id: accountId, p_source: 'csv',
     p_file_name: String(fd.get('fileName') ?? '').slice(0, 200) || null, p_profile: prepared.profile,
@@ -62,5 +63,5 @@ export async function confirmImport(_p: FormState, fd: FormData): Promise<FormSt
   }
   const r = data as { imported: number; duplicates: number; interest: number; purification_items: number };
   revalidatePath('/', 'layout');
-  redirect(`/import?resultat=${encodeResult({ ...r, duplicates: r.duplicates + prepared.preview.duplicates.length })}`);
+  redirect(`/import?resultat=${encodeResult(r)}`);
 }

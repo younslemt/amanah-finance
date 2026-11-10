@@ -63,7 +63,7 @@ select pg_temp.check_val('import : résultat du lot', format($q$
   '{"rows": 6, "imported": 6, "interest": 2, "duplicates": 0, "purification_items": 2}');
 select pg_temp.check_val('import : journal du lot (lu, importé, doublons, erreurs, intérêts)',
   $q$select row_count || '/' || imported_count || '/' || duplicate_count || '/' || error_count || '/' || interest_count || '/' || purification_count
-     from public.import_batches$q$, '6/6/0/1/2/2');
+     from public.import_batches$q$, '7/6/0/1/2/2');
 select pg_temp.check_val('import : catégorie inconnue laissée vide',
   $q$select coalesce(category_slug, 'aucune') from public.transactions where dedupe_hash = 'n-2'$q$, 'aucune');
 select pg_temp.check_val('import : un débit n''est jamais un intérêt',
