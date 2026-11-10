@@ -59,7 +59,7 @@ jobs:
 
       - name: Publier le pnpm-lock.yaml généré
         if: steps.install.outputs.lockfile == 'generated'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pnpm-lock
           path: pnpm-lock.yaml
@@ -112,7 +112,7 @@ jobs:
 
       - name: Rapports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rapports-app
           path: |
@@ -140,7 +140,7 @@ jobs:
         run: ./scripts/test-db.sh 2>&1 | tee sql-tests.log
         env: { DATABASE_URL: postgres://postgres:postgres@localhost:5432/amanah_test }
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: { name: rapports-sql, path: sql-tests.log }
 
   supabase:
@@ -159,7 +159,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
           TEST_DB_TARGET: supabase
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: { name: rapports-supabase, path: supabase-tests.log }
 
   e2e-live:
@@ -224,7 +224,7 @@ jobs:
         run: tail -n 120 start-live.log || true
       - name: Rapports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rapports-e2e-live
           path: |
