@@ -25,8 +25,9 @@ export default async function SettingsPage() {
         <CardTitle>Profil</CardTitle>
         <ActionForm action={saveProfile} submitLabel="Enregistrer le profil" testId="form-parametres-profil">
           <Field label="Prénom ou pseudonyme" name="displayName" defaultValue={ctx.displayName ?? ''} required maxLength={80} />
-          <Field label="Nom du foyer" name="householdName" defaultValue={household?.name ?? ''} required maxLength={120} />
-          <SelectField label="Région de résidence" name="region" defaultValue={household?.region ?? ''}>
+          <Field label="Nom du foyer" name="householdName" defaultValue={household?.name ?? ''} required maxLength={120} readOnly={!ctx.isOwner}
+            hint={ctx.isOwner ? undefined : 'Seul le propriétaire du foyer peut modifier son nom et sa région.'} />
+          <SelectField label="Région de résidence" name="region" defaultValue={household?.region ?? ''} disabled={!ctx.isOwner}>
             <option value="">Non indiquée</option>
             <option value="BRU">Bruxelles-Capitale</option>
             <option value="WAL">Wallonie</option>
@@ -63,7 +64,7 @@ export default async function SettingsPage() {
 
       <Card className="mt-4">
         <CardTitle>Supprimer mon compte</CardTitle>
-        <Notice tone="warning">La suppression efface définitivement votre compte, votre profil, vos consentements et toutes les données de votre foyer. Elle ne peut pas être annulée.</Notice>
+        <Notice tone="warning">La suppression efface définitivement votre compte, votre profil et vos consentements. Si vous êtes seul dans votre foyer, toutes ses données sont effacées ; si d’autres personnes en font partie, les données communes leur restent et votre nom en est retiré. Elle ne peut pas être annulée.</Notice>
         <ActionForm action={deleteAccount} submitLabel="Supprimer définitivement" variant="danger" className="mt-3" testId="form-suppression">
           <Field label="Saisissez SUPPRIMER pour confirmer" name="confirmation" autoComplete="off" required />
         </ActionForm>

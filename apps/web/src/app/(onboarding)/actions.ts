@@ -47,11 +47,12 @@ export async function saveProfile(_prev: FormState, fd: FormData): Promise<FormS
   const ctx = await requireSession();
   const parsed = profileSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
-  const [p, h] = await Promise.all([
-    ctx.supabase.from('profiles').update({ display_name: parsed.data.displayName, profile_completed_at: new Date().toISOString() }).eq('id', ctx.userId),
-    ctx.supabase.from('households').update({ name: parsed.data.householdName, region: parsed.data.region }).eq('id', ctx.householdId),
-  ]);
-  if (p.error || h.error) { console.error('[profile] update', p.error?.code, h.error?.code); return formError('Enregistrement impossible. Réessayez.'); }
+  // Profil et foyer dans UNE transaction ; le nom du foyer n'est modifié que par son propriétaire
+  const { error } = await ctx.supabase.rpc('save_profile', {
+    p_household_id: ctx.householdId, p_display_name: parsed.data.displayName,
+    p_household_name: parsed.data.householdName, p_region: parsed.data.region,
+  });
+  if (error) { console.error('[profile] save', error.code); return formError('Enregistrement impossible. Réessayez.'); }
   revalidatePath('/', 'layout');
   if (fd.get('from') === 'onboarding') redirect('/dashboard');
   return formOk('Profil enregistré.');

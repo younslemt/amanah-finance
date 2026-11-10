@@ -81,3 +81,14 @@ compte de B puis connexion impossible.
 - **CSP** : `script-src 'unsafe-inline'` toujours présent ; nonce prévu.
 - **Partage du foyer** (conjoint) : prévu par le schéma, pas d'écran.
 - Pas de déploiement public : aucun environnement hébergé n'a été créé.
+
+## Revue technique finale (avant fusion)
+
+| Point revu | Constat | Correction | Preuve |
+| --- | --- | --- | --- |
+| Atomicité de l'objectif Hajj | Objectif et épargne initiale enregistrés en deux écritures : une erreur pouvait laisser un objectif sans son affectation | Fonction SQL `create_goal_with_allocation` (une transaction) | Tests SQL : rollback complet après échec, aucun objectif orphelin |
+| Atomicité du profil | Profil et foyer enregistrés en parallèle, sans transaction | Fonction SQL `save_profile` | Tests SQL : profil inchangé si le foyer est refusé |
+| Autres écritures | Consentements (une seule insertion de 3 lignes), opérations, budgets, comptes, catégories, affectations, retrait, suppression : une seule instruction chacune | Aucune nécessaire | Revue du code |
+| Foyer partagé | Supprimer le compte du créateur supprimait tout le foyer, données des autres membres comprises (cascade sur `households.created_by`) — **reproduit** | Déclencheur sur la suppression d'un utilisateur (compte supprimé par lui-même ou par un administrateur) : foyer conservé, propriété transférée, traces nominatives anonymisées (journal, calculs, décisions) ; foyer effacé seulement s'il ne reste personne | 23 contrôles SQL (`shared_household_integrity.test.sql`) |
+| Membre non propriétaire | Ne pouvait pas enregistrer son propre profil | Profil toujours modifiable ; nom et région du foyer réservés au propriétaire | Tests SQL et unitaires |
+| Consentements | Le consentement article 9 conditionne toute l'application | Ajustements documentés, à réaliser en lot 0 du Sprint 2 | `CONSENTEMENTS-ANALYSE.md` |

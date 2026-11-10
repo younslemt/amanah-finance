@@ -16,6 +16,7 @@ export interface SessionContext {
   email: string | null;
   householdId: string;
   canWrite: boolean;
+  isOwner: boolean;
   displayName: string | null;
   profileCompleted: boolean;
   consents: ConsentRecord[];
@@ -42,6 +43,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     email: auth.user.email ?? null,
     householdId: membership.data.household_id as string,
     canWrite: membership.data.role === 'owner' || membership.data.role === 'member',
+    isOwner: membership.data.role === 'owner',
     displayName: (profile.data?.display_name as string | null) ?? null,
     profileCompleted: Boolean(profile.data?.profile_completed_at),
     consents: (consents.data ?? []) as ConsentRecord[],

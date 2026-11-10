@@ -42,6 +42,8 @@ describe('profil et comptes', () => {
     expect(r.success && r.data.region).toBe(null);
     expect(profileSchema.safeParse({ displayName: '', householdName: 'x', region: 'BRU' }).success).toBe(false);
     expect(profileSchema.safeParse({ displayName: 'A', householdName: 'x', region: 'PARIS' }).success).toBe(false);
+    const member = profileSchema.safeParse({ displayName: 'Idris', householdName: 'Foyer' });
+    expect(member.success && member.data.region).toBe(null);
   });
   it('accepte un solde de départ négatif (carte de crédit) mais pas un type inconnu', () => {
     const r = accountSchema.safeParse({ name: 'Visa', type: 'credit_card', openingBalance: '-250,00' });

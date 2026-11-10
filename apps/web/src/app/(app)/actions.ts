@@ -93,17 +93,12 @@ export async function createHajjGoal(_p: FormState, fd: FormData): Promise<FormS
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
   if (d.targetDate <= today) return formError('Vérifiez les informations saisies.', { targetDate: 'La date souhaitée doit être dans le futur.' });
   if (d.available > d.target) return formError('Vérifiez les informations saisies.', { available: 'L’épargne disponible dépasse le montant cible.' });
-  const { data: goal, error } = await ctx.supabase.from('goals').insert({
-    household_id: ctx.householdId, kind: 'hajj', name: d.name, target_cents: d.target, target_date: d.targetDate, monthly_capacity_cents: d.monthlyCapacity,
-  }).select('id').single();
-  if (error || !goal) return dbError('goal', error ?? {});
-  if (d.available > 0) {
-    const a = await ctx.supabase.from('goal_allocations').insert({
-      household_id: ctx.householdId, goal_id: goal.id, amount_cents: d.available, allocated_on: today, note: 'Épargne disponible à la création',
-    });
-    if (a.error) return dbError('goal allocation', a.error);
-  }
-  return done('Objectif Hajj créé.');
+  // Objectif et épargne initiale dans UNE transaction (fonction SQL) : jamais d'objectif à moitié enregistré
+  const { error } = await ctx.supabase.rpc('create_goal_with_allocation', {
+    p_household_id: ctx.householdId, p_kind: 'hajj', p_name: d.name, p_target_cents: d.target, p_target_date: d.targetDate,
+    p_monthly_capacity_cents: d.monthlyCapacity, p_initial_cents: d.available, p_allocated_on: today,
+  });
+  return error ? dbError('goal', error) : done('Objectif Hajj créé.');
 }
 
 export async function allocateToGoal(_p: FormState, fd: FormData): Promise<FormState> {

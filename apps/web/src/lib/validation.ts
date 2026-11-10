@@ -44,7 +44,8 @@ export const newPasswordSchema = z.object({ password, passwordConfirm: z.string(
 export const profileSchema = z.object({
   displayName: z.string().trim().min(1, 'Indiquez un prénom ou un pseudonyme.').max(80, 'Prénom trop long.'),
   householdName: z.string().trim().min(1, 'Indiquez un nom de foyer.').max(120, 'Nom de foyer trop long.'),
-  region: z.enum(['BRU', 'WAL', 'VLA', '']).transform((v) => (v === '' ? null : v)),
+  // Absente quand le champ est désactivé (membre non propriétaire) : traitée comme non renseignée
+  region: z.enum(['BRU', 'WAL', 'VLA', '']).optional().transform((v) => (v ? v : null)),
 });
 
 export const ACCOUNT_TYPES = ['current', 'savings', 'regulated_savings', 'cash', 'credit_card', 'other'] as const;
