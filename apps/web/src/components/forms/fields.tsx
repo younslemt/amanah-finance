@@ -1,25 +1,30 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
-const inputClass = 'w-full rounded-lg border border-line bg-ivory px-3 py-2.5 text-ink outline-none focus:border-primary-700';
+const inputClass = 'mt-1 w-full rounded-lg border border-line bg-ivory px-3 py-2.5 text-ink outline-none focus:border-primary-700';
 
+/**
+ * Champs étiquetés par imbrication (<label> englobant) : aucun identifiant n'est
+ * nécessaire, donc aucun doublon possible quand plusieurs formulaires d'une page
+ * ont des champs de même nom.
+ */
 export function Field({ label, name, hint, ...rest }: { label: string; name: string; hint?: string } & InputHTMLAttributes<HTMLInputElement>) {
-  const id = `f-${name}`;
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium">{label}</label>
-      <input id={id} name={name} className={inputClass} aria-describedby={hint ? `${id}-hint` : undefined} {...rest} />
-      {hint ? <p id={`${id}-hint`} className="mt-1 text-xs text-ink-muted">{hint}</p> : null}
+      <label className="block text-sm font-medium">
+        {label}
+        <input name={name} className={inputClass} {...rest} />
+      </label>
+      {hint ? <p className="mt-1 text-xs text-ink-muted">{hint}</p> : null}
     </div>
   );
 }
 
 export function SelectField({ label, name, children, ...rest }: { label: string; name: string; children: ReactNode } & SelectHTMLAttributes<HTMLSelectElement>) {
-  const id = `f-${name}`;
   return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium">{label}</label>
-      <select id={id} name={name} className={inputClass} {...rest}>{children}</select>
-    </div>
+    <label className="block text-sm font-medium">
+      {label}
+      <select name={name} className={inputClass} {...rest}>{children}</select>
+    </label>
   );
 }
 
