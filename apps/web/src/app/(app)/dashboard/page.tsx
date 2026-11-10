@@ -5,6 +5,8 @@ import { getSnapshot } from '@/lib/data';
 import { formatCents, formatMonth, formatPermille } from '@/lib/format';
 import { interpolate } from '@/lib/i18n';
 import { fr } from '@/messages/fr';
+import { isDemoMode } from '@/lib/env';
+import { getSessionContext } from '@/lib/supabase/session';
 
 export const metadata: Metadata = { title: fr.nav.dashboard };
 
@@ -17,21 +19,31 @@ function SeeAll({ href }: { href: string }) {
 
 export default async function DashboardPage() {
   const s = await getSnapshot();
+  const displayName = isDemoMode ? null : (await getSessionContext())?.displayName ?? null;
   const t = fr.dashboard;
-  const last = s.previousMonths[0];
+  const greeting = displayName ? `${t.greeting}, ${displayName}` : t.greeting;
+  const current = s.month; // mois en cours : les saisies apparaissent immédiatement
 
   if (s.isEmpty) {
     return (
       <>
-        <PageHeader title={t.greeting} subtitle={fr.app.tagline} />
-        <Card><h2 className="text-xl text-primary-900">{t.emptyTitle}</h2><p className="mt-2 text-ink-muted">{t.emptyBody}</p></Card>
+        <PageHeader title={greeting} subtitle={fr.app.tagline} />
+        <Card>
+          <h2 className="text-xl text-primary-900">{t.emptyTitle}</h2>
+          <p className="mt-2 text-ink-muted">{t.emptyBody}</p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-3">
+            <li><Link href="/comptes" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">1. Ajouter un compte</Link></li>
+            <li><Link href="/budget" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">2. Saisir revenus et dépenses</Link></li>
+            <li><Link href="/goals" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">3. Créer un objectif Hajj</Link></li>
+          </ul>
+        </Card>
       </>
     );
   }
 
   return (
     <>
-      <PageHeader title={t.greeting} subtitle={fr.app.tagline} />
+      <PageHeader title={greeting} subtitle={fr.app.tagline} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card><Stat label={t.balance} value={formatCents(s.totalBalanceCents)} /></Card>
@@ -40,11 +52,11 @@ export default async function DashboardPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardTitle action={<SeeAll href="/budget" />}>{t.lastMonth} · {formatMonth(last.month)}</CardTitle>
+          <CardTitle action={<SeeAll href="/budget" />}>{t.thisMonth} · {formatMonth(current.month)}</CardTitle>
           <div className="grid grid-cols-3 gap-4">
-            <Stat label={t.income} value={formatCents(last.incomeCents, { round: true })} tone="positive" />
-            <Stat label={t.expenses} value={formatCents(last.expenseCents, { round: true })} />
-            <Stat label={t.savingsRate} value={last.savingsRatePermille === null ? '—' : formatPermille(last.savingsRatePermille)} />
+            <Stat label={t.income} value={formatCents(current.incomeCents, { round: true })} tone="positive" />
+            <Stat label={t.expenses} value={formatCents(current.expenseCents, { round: true })} />
+            <Stat label={t.savingsRate} value={current.savingsRatePermille === null ? '—' : formatPermille(current.savingsRatePermille)} />
           </div>
         </Card>
 

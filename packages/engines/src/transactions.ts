@@ -27,6 +27,8 @@ export interface CategoryInfo {
   kind: 'income' | 'expense' | 'transfer';
   isEssential: boolean;
   isInterest: boolean;
+  /** Libellé d'une catégorie personnelle (les catégories système sont traduites par l'interface). */
+  label?: string;
 }
 
 export interface CategorizationResult {
