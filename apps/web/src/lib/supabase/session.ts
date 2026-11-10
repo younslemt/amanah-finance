@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from './server.ts';
 import { missingConsents, type ConsentRecord } from '../legal/documents.ts';
 import { nextOnboardingStep } from '../onboarding.ts';
+import { isDemoMode } from '../env.ts';
 
 /**
  * Contexte de l'utilisateur connecté, résolu côté serveur à chaque requête.
@@ -21,6 +22,7 @@ export interface SessionContext {
 }
 
 export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
+  if (isDemoMode) return null; // aucune session ni aucun appel Supabase en démonstration
   const supabase = await createSupabaseServerClient();
   const { data: auth, error } = await supabase.auth.getUser();
   if (error || !auth.user) return null;
@@ -48,6 +50,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
 
 /** Exige une session ; sinon redirige vers la connexion. */
 export async function requireSession(): Promise<SessionContext> {
+  if (isDemoMode) redirect('/dashboard'); // les écrans de compte n'existent pas en démonstration
   const ctx = await getSessionContext();
   if (!ctx) redirect('/connexion');
   return ctx;

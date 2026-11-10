@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# bash -eo pipefail : une commande en échec dans un tube (ex. « build | tee ») fait échouer l'étape
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
