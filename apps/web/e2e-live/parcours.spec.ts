@@ -23,12 +23,12 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await page.getByLabel('Mot de passe', { exact: true }).fill(A.password);
     await page.getByLabel('Confirmer le mot de passe').fill('autre-mot-2026');
     await page.getByRole('button', { name: 'Créer mon compte' }).click();
-    await expect(page.getByRole('alert')).toContainText('ne correspondent pas');
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('ne correspondent pas');
 
     const { sentAt } = await signUpAndConfirm(page, A);
 
     await signIn(page, A);
-    await expect(page.getByRole('alert')).toContainText('pas encore confirmée');
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('pas encore confirmée');
 
     await page.goto(await latestLink(A.email, 'signup', sentAt));
     await expect(page).toHaveURL(/\/bienvenue\/consentements/);
@@ -42,7 +42,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await expect(page).toHaveURL(/\/bienvenue\/consentements/);
     // Envoi sans cocher : refusé
     await page.getByRole('button', { name: 'Accepter et continuer' }).click();
-    await expect(page.getByRole('alert')).toContainText('Chaque case doit être cochée');
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('Chaque case doit être cochée');
     await completeOnboarding(page, A.name);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(A.name);
     await expect(page.getByText('Votre espace est prêt')).toBeVisible();
@@ -210,7 +210,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await form.getByRole('button', { name: 'Supprimer définitivement' }).click();
     await expect(page).toHaveURL(/\/connexion\?message=account_deleted/);
     await signIn(page, B);
-    await expect(page.getByRole('alert')).toContainText('incorrect');
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('incorrect');
     await expect(apiToken(B)).rejects.toThrow();
   });
 });
