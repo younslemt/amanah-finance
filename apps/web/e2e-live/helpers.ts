@@ -63,11 +63,13 @@ export async function signUpAndConfirm(page: Page, user: { email: string; passwo
   return { sentAt };
 }
 
-export async function signIn(page: Page, user: { email: string; password: string }) {
+/** Connexion ; par défaut, attend d'avoir quitté l'écran de connexion (session ouverte). */
+export async function signIn(page: Page, user: { email: string; password: string }, opts: { expectSuccess?: boolean } = {}) {
   await page.goto('/connexion');
   await page.getByLabel('Adresse e-mail').fill(user.email);
   await page.getByLabel('Mot de passe').fill(user.password);
   await page.getByRole('button', { name: 'Se connecter' }).click();
+  if (opts.expectSuccess !== false) await page.waitForURL((u) => !u.pathname.startsWith('/connexion'));
 }
 
 export async function completeOnboarding(page: Page, name: string) {

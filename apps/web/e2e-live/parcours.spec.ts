@@ -27,7 +27,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
 
     const { sentAt } = await signUpAndConfirm(page, A);
 
-    await signIn(page, A);
+    await signIn(page, A, { expectSuccess: false });
     await expect(page.getByRole('main').getByRole('alert')).toContainText('pas encore confirmée');
 
     await page.goto(await latestLink(A.email, 'signup', sentAt));
@@ -209,7 +209,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await form.getByLabel('Saisissez SUPPRIMER pour confirmer').fill('SUPPRIMER');
     await form.getByRole('button', { name: 'Supprimer définitivement' }).click();
     await expect(page).toHaveURL(/\/connexion\?message=account_deleted/);
-    await signIn(page, B);
+    await signIn(page, B, { expectSuccess: false });
     await expect(page.getByRole('main').getByRole('alert')).toContainText('incorrect');
     await expect(apiToken(B)).rejects.toThrow();
   });
