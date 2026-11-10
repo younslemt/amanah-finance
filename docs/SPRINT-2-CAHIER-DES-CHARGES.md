@@ -1,6 +1,7 @@
 # Sprint 2 — cahier des charges : Zakat, purification, dons, dashboard, import CSV
 
-**Statut : à valider. Aucun développement n'est commencé.**
+**Statut (10 novembre 2026)** : lots 0 (consentement par fonction), 5 (import CSV) et 2 (purification) réalisés
+sur la branche `sprint-2` (PR #12, détail dans `SPRINT-2.md`). Suite proposée au §10.
 Objectif : livrer les modules qui différencient le produit, en réutilisant les moteurs existants
 (`packages/engines` : Zakat, purification, budget, objectifs, patrimoine, CSV) et la couche
 `packages/banking` (pipeline d'import), sans reconstruire de module.
@@ -125,3 +126,19 @@ calcul fiscal, validation religieuse automatique.
 | D4 | Exemples d'exports CSV fictifs (structure réelle, données inventées) des 4 grandes banques | Import CSV |
 | D5 | Source des prix de l'or et de l'argent (saisie manuelle par un administrateur proposée) | Zakat |
 | D6 | Stockage des justificatifs : durée de conservation | Dons |
+
+## 10. Suite du Sprint 2 (proposée)
+
+Ordre retenu : ce qui s'appuie directement sur l'import et la purification d'abord ; Zakat avancée et
+succession restent hors périmètre.
+
+| Lot | Contenu | Dépend de | Taille |
+| --- | --- | --- | --- |
+| 3 — Dons et Sadaqah | Saisie des contributions (Sadaqah, Zakat al-Fitr, waqf, autre), bénéficiaire libre ou référencé, totaux par type et par année, purifications déjà liées ; justificatifs dans un bucket privé par personne, avec test d'isolation du stockage | Lot 0 (owner_id, RLS) ; D6 (durée de conservation) | 3 j |
+| 4 — Dashboard financier | Tendance 6 mois (revenus, dépenses, solde), dépenses par catégorie face aux budgets, patrimoine net partiel ; bloc conformité (purification à faire, dons de l'année) seulement avec consentement ; chaque graphique doublé d'un tableau | Import (données réelles) | 3 j |
+| 5 — Zakat de base | Réglages par personne (base du nisab, année, Hawl, options), aperçu en direct, calcul figé et historique ; aucune valeur par défaut ; référentiel « brouillon » affiché comme tel | D2 (comité charia), D5 (prix des métaux) | 4 j |
+| 6 — Import, compléments | Profils des 4 grandes banques belges sur exports fictifs ; correction de catégorie à l'aperçu ; règles de catégorisation personnelles | D4 | 2 j |
+| 7 — Foyer partagé | Invitation d'un membre, information explicite sur la confidentialité des données religieuses, rôle lecture seule | Avis juriste (Q sur foyers) | 2 j |
+
+Décisions à obtenir avant de lancer les lots 3 et 5 : D2, D5, D6 ; avant le lot 6 : D4 ; avant la mise en
+production des lots 0 à 2 : D1 (juriste) et D3 (méthodologie de purification laissée à l'utilisateur ou fixée).
