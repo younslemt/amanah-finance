@@ -17,9 +17,10 @@ const rows: HouseholdRows = {
     { slug: 'salaire', kind: 'income', is_essential: false, is_interest: false, household_id: null },
     { slug: 'logement', kind: 'expense', is_essential: true, is_interest: false, household_id: null },
     { slug: 'logement', kind: 'expense', is_essential: false, is_interest: false, household_id: 'h1' },
+    { slug: 'perso-voyages', kind: 'expense', is_essential: false, is_interest: false, household_id: 'h1', label: 'Voyages' },
   ],
   budgets: [{ category_slug: 'logement', limit_cents: 80000, month: '2026-11-01' }, { category_slug: 'logement', limit_cents: 1, month: '2026-10-01' }],
-  goals: [{ id: 'g1', kind: 'hajj', name: 'Hajj', target_cents: '800000', target_date: '2028-06-01', status: 'active' }],
+  goals: [{ id: 'g1', kind: 'hajj', name: 'Hajj', target_cents: '800000', target_date: '2028-06-01', status: 'active', monthly_capacity_cents: '40000' }],
   allocations: [{ goal_id: 'g1', amount_cents: 10000, allocated_on: '2026-10-15' }],
   assets: [
     { id: 'as1', kind: 'bank_balance', name: 'Doublon du compte', value_cents: 270000, weight_mg: null, purity_permille: null, is_accessible: true, receivable_likely: null, account_id: 'acc-1', details: {} },
@@ -67,5 +68,16 @@ describe('conversion des lignes Supabase', () => {
     expect(z.options.debts).toBe('due_12_months');
     expect(z.options.longTermInvestments).toEqual({ mode: 'full_market_value' });
     expect(z.hawlStart).toBe('2025-11-01');
+  });
+});
+
+describe('Sprint 1 : catégories personnelles et capacité d’épargne', () => {
+  const data = mapHouseholdRows(rows);
+  it('conserve le libellé des catégories personnelles', () => {
+    expect(data.categories.find((c) => c.slug === 'perso-voyages')!.label).toBe('Voyages');
+  });
+  it('transmet la capacité mensuelle déclarée au moteur', () => {
+    expect(data.goals[0].monthlyCapacityCents).toBe(40_000);
+    expect(buildSnapshot(data).goals[0].plan.paceSource).toBe('declared');
   });
 });

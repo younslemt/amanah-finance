@@ -1,6 +1,6 @@
 import type { Cents } from './money.ts';
 import { divRoundHalfEven } from './money.ts';
-import { monthsBetween, type IsoDate } from './dates.ts';
+import { addMonths, monthsBetween, type IsoDate } from './dates.ts';
 
 export type GoalKind = 'hajj' | 'omra' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
 
@@ -10,6 +10,8 @@ export interface Goal {
   name: string;
   targetCents: Cents;
   targetDate: IsoDate;
+  /** Capacité d'épargne mensuelle déclarée par l'utilisateur (facultative). */
+  monthlyCapacityCents?: number;
 }
 
 export interface GoalAllocation {
@@ -30,6 +32,10 @@ export interface GoalPlan {
   status: 'achieved' | 'on_track' | 'behind' | 'overdue' | 'to_determine';
   /** Date estimée d'atteinte au rythme moyen observé, si calculable. */
   projectedMonthsAtCurrentPace: number | null;
+  /** Date estimée d'atteinte de la cible à ce rythme (null si rythme inconnu ou nul). */
+  projectedCompletionDate: IsoDate | null;
+  /** Rythme utilisé pour le statut : capacité déclarée, rythme observé, ou aucun. */
+  paceSource: 'declared' | 'observed' | 'none';
 }
 
 /**
@@ -37,7 +43,12 @@ export interface GoalPlan {
  * Aucune somme n'est déplacée : l'allocation est une affectation déclarative.
  * @param monthlyPaceCents rythme d'épargne mensuel prévu ou observé (facultatif)
  */
-export function planGoal(goal: Goal, allocations: readonly GoalAllocation[], asOf: IsoDate, monthlyPaceCents?: Cents): GoalPlan {
+export function planGoal(goal: Goal, allocations: readonly GoalAllocation[], asOf: IsoDate, observedPaceCents?: Cents): GoalPlan {
+  // La capacité déclarée prime sur le rythme observé : c'est l'engagement de l'utilisateur.
+  const declared = goal.monthlyCapacityCents;
+  if (declared !== undefined && (!Number.isInteger(declared) || declared < 0)) throw new RangeError('capacité mensuelle invalide');
+  const monthlyPaceCents = declared ?? observedPaceCents;
+  const paceSource: GoalPlan['paceSource'] = declared !== undefined ? 'declared' : observedPaceCents !== undefined ? 'observed' : 'none';
   if (!Number.isInteger(goal.targetCents) || goal.targetCents <= 0) throw new RangeError('montant cible invalide');
   const saved = Math.max(0, allocations.filter((a) => a.goalId === goal.id && a.allocatedOn <= asOf).reduce((s, a) => s + a.amountCents, 0));
   const remaining = Math.max(0, goal.targetCents - saved);
@@ -65,6 +76,8 @@ export function planGoal(goal: Goal, allocations: readonly GoalAllocation[], asO
     monthlyRequiredCents: monthlyRequired,
     status,
     projectedMonthsAtCurrentPace: projected,
+    projectedCompletionDate: projected === null ? null : addMonths(asOf, projected),
+    paceSource,
   };
 }
 

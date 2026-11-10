@@ -38,3 +38,12 @@ export function toIsoDate(year: number, month: number, day: number): IsoDate {
   parseIsoDate(iso);
   return iso;
 }
+
+/** Ajoute n mois à une date (jour borné à la fin du mois : 31 janvier + 1 mois = 28 ou 29 février). */
+export function addMonths(date: IsoDate, n: number): IsoDate {
+  if (!Number.isInteger(n)) throw new RangeError('nombre de mois invalide');
+  const t = new Date(parseIsoDate(date));
+  const y = t.getUTCFullYear(), m = t.getUTCMonth() + n, d = t.getUTCDate();
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(d, last))).toISOString().slice(0, 10);
+}

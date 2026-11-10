@@ -31,7 +31,7 @@ function SignOut({ className }: { className?: string }) {
   );
 }
 
-export function AppShell({ children, demo }: { children: ReactNode; demo: boolean }) {
+export function AppShell({ children, demo, displayName = null }: { children: ReactNode; demo: boolean; displayName?: string | null }) {
   const pathname = usePathname();
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -55,7 +55,14 @@ export function AppShell({ children, demo }: { children: ReactNode; demo: boolea
           ))}
         </nav>
         <div className="space-y-3 px-6 py-5 text-primary-100">
-          {demo ? null : <SignOut />}
+          {demo ? null : (
+            <>
+              {displayName ? <p className="text-sm text-ivory">{displayName}</p> : null}
+              <Link href="/comptes" className="block text-sm underline-offset-4 hover:underline">Mes comptes</Link>
+              <Link href="/parametres" className="block text-sm underline-offset-4 hover:underline">Paramètres</Link>
+              <SignOut />
+            </>
+          )}
           <p className="text-xs">{brand.tagline}</p>
         </div>
       </aside>
@@ -67,7 +74,13 @@ export function AppShell({ children, demo }: { children: ReactNode; demo: boolea
         <header className="flex items-center gap-2 border-b border-line bg-paper px-4 py-3 md:hidden">
           <LogoMark className="h-7 w-7 text-primary-900" />
           <span className="font-[family-name:var(--font-display)] text-lg text-primary-900">{brand.shortName}</span>
-          {demo ? null : <SignOut className="ml-auto text-primary-800" />}
+          {demo ? null : (
+            <div className="ml-auto flex items-center gap-4 text-sm text-primary-800">
+              <Link href="/comptes" className="underline-offset-4 hover:underline">Comptes</Link>
+              <Link href="/parametres" className="underline-offset-4 hover:underline">Paramètres</Link>
+              <SignOut />
+            </div>
+          )}
         </header>
         <main id="contenu" className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">{children}</main>
 

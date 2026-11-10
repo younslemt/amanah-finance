@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/vitest-web.xml"
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/vitest-web.xml",
+    "test:e2e:live": "playwright test -c playwright.live.config.ts"
   },
   "dependencies": {
     "@amanah/banking": "workspace:*",

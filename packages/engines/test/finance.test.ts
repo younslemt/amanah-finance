@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyRatePer100k, canTransition, categorize, computeNetWorth, dedupeHash, detectInterest, divRoundHalfEven,
-  metalValueCents, monthsBetween, observedMonthlyPace, parseAmountToCents, planEmergencyFund, planGoal,
+  addMonths, metalValueCents, monthsBetween, observedMonthlyPace, parseAmountToCents, planEmergencyFund, planGoal,
   purificationAmount, resolveInterestAmounts, summarizeMonth, summarizePurification,
   type CategoryInfo, type CategorizationRule, type Transaction,
 } from '../src/index.ts';
@@ -152,6 +152,11 @@ describe('objectifs', () => {
     expect(observedMonthlyPace(allocations, 'g1', '2027-06-01')).toBe(undefined);
     expect(() => planGoal({ ...hajj, targetCents: 0 }, allocations, '2026-11-09')).toThrow();
   });
+  it('utilise la capacité déclarée et projette une date déterministe', () => {
+    const p = planGoal({ ...hajj, monthlyCapacityCents: 40_000 }, allocations, '2026-11-09', 10_000);
+    expect(p.paceSource).toBe('declared');
+    expect(p.status).toBe('on_track'); // 400 €/mois déclarés ≥ 361,12 € requis, malgré 100 € observés
+  });
   it('reconnaît un objectif atteint ou dépassé dans le temps', () => {
     expect(planGoal({ ...hajj, targetCents: 100_000 }, allocations, '2026-11-09').status).toBe('achieved');
     expect(planGoal({ ...hajj, targetDate: '2026-10-01' }, allocations, '2026-11-09').status).toBe('overdue');
@@ -232,5 +237,36 @@ describe('patrimoine', () => {
     const w = computeNetWorth([{ id: 'd', kind: 'gold', label: 'Or', weightMg: 10_000 }], [], { gold: null }, '2026-11-09');
     expect(w.status).toBe('partial');
     expect(w.unvaluedAssetIds).toEqual(['d']);
+  });
+});
+
+describe('objectif Hajj : capacité et projection', () => {
+  const g = { id: 'h', kind: 'hajj' as const, name: 'Hajj', targetCents: 900_000, targetDate: '2028-05-01' };
+  const alloc = [{ goalId: 'h', amountCents: 300_000, allocatedOn: '2026-11-01' }];
+  it('en bonne voie quand la capacité couvre l’effort requis', () => {
+    const p = planGoal({ ...g, monthlyCapacityCents: 40_000 }, alloc, '2026-11-10');
+    expect(p.monthsLeft).toBe(17);
+    expect(p.monthlyRequiredCents).toBe(35_295); // 600 000 / 17, arrondi au centime supérieur
+    expect(p.status).toBe('on_track');
+    expect(p.projectedMonthsAtCurrentPace).toBe(15);
+    expect(p.projectedCompletionDate).toBe('2028-02-10');
+  });
+  it('en retard quand la capacité est insuffisante', () => {
+    const p = planGoal({ ...g, monthlyCapacityCents: 20_000 }, alloc, '2026-11-10');
+    expect(p.status).toBe('behind');
+    expect(p.projectedCompletionDate).toBe('2029-05-10');
+  });
+  it('capacité nulle : pas de date projetée', () => {
+    const p = planGoal({ ...g, monthlyCapacityCents: 0 }, alloc, '2026-11-10');
+    expect(p.projectedCompletionDate).toBe(null);
+    expect(p.status).toBe('behind');
+  });
+  it('refuse une capacité invalide', () => {
+    expect(() => planGoal({ ...g, monthlyCapacityCents: -1 }, alloc, '2026-11-10')).toThrow();
+  });
+  it('ajoute des mois en bornant le jour', () => {
+    expect(addMonths('2027-01-31', 1)).toBe('2027-02-28');
+    expect(addMonths('2028-01-31', 1)).toBe('2028-02-29');
+    expect(addMonths('2026-11-10', 15)).toBe('2028-02-10');
   });
 });

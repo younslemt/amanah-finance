@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# bash -eo pipefail : une commande en échec dans un tube (ex. « build | tee ») fait échouer l'étape
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -88,7 +93,8 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/dashboard || true)
             [ "$code" = "200" ] && break; sleep 2
           done
-          echo "HTTP /dashboard : $code"; test "$code" = "200"
+          echo "HTTP /dashboard : $code"
+          if [ "$code" != "200" ]; then echo "----- start.log -----"; cat start.log; exit 1; fi
           curl -sI http://localhost:3000/dashboard | grep -i "content-security-policy"
           curl -s http://localhost:3000/dashboard | grep -q "Mode démonstration"
           # Le serveur reste démarré : les tests Playwright l'utilisent (reuseExistingServer).
@@ -155,3 +161,75 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with: { name: rapports-supabase, path: supabase-tests.log }
+
+  e2e-live:
+    name: Parcours réel (Supabase local, mobile et ordinateur)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Cache du store pnpm
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package.json') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: Installation des dépendances
+        run: pnpm install --frozen-lockfile
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Démarrer Supabase local (Auth, base, boîte mail de test)
+        run: supabase start -x studio,imgproxy,realtime,storage-api,edge-runtime,logflare,vector
+      - name: Variables de l'environnement local
+        run: |
+          supabase status -o env > sb.env
+          set -a; . ./sb.env; set +a
+          MAIL="${MAILPIT_URL:-${INBUCKET_URL:-http://127.0.0.1:54324}}"
+          {
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "E2E_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "E2E_MAIL_URL=$MAIL"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+          echo "API : $API_URL — boîte mail : $MAIL"
+      - name: Compilation Next.js en mode réel
+        run: pnpm --filter @amanah/web build
+        env:
+          NEXT_PUBLIC_APP_MODE: live
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      - name: Démarrage en mode réel
+        run: |
+          pnpm --filter @amanah/web start > start-live.log 2>&1 &
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/connexion || true)
+            [ "$code" = "200" ] && break; sleep 2
+          done
+          echo "HTTP /connexion : $code"
+          if [ "$code" != "200" ]; then cat start-live.log; exit 1; fi
+          # Une page privée sans session redirige vers la connexion
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/dashboard)" = "307"
+      - name: Navigateur Playwright
+        run: pnpm --filter @amanah/web exec playwright install --with-deps chromium
+      - name: Parcours réel (Playwright)
+        run: pnpm --filter @amanah/web exec playwright test -c playwright.live.config.ts
+        env:
+          CI: 'true'
+      - name: Journal du serveur en cas d'échec
+        if: failure()
+        run: tail -n 120 start-live.log || true
+      - name: Rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-e2e-live
+          path: |
+            start-live.log
+            apps/web/reports/
+            apps/web/playwright-report-live/
+            apps/web/test-results/
+          if-no-files-found: ignore

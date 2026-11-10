@@ -1,30 +1,44 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { LogoMark, Notice } from '@/components/ui';
+import { Notice } from '@/components/ui';
+import { ActionForm } from '@/components/forms/action-form';
+import { Field } from '@/components/forms/fields';
 import { isDemoMode } from '@/lib/env';
-import { parseAuthError, safeRedirectPath } from '@/lib/redirect';
+import { parseAuthError, parseAuthInfo, safeRedirectPath } from '@/lib/redirect';
 import { fr } from '@/messages/fr';
-import { SignInForm } from './sign-in-form';
+import { signIn } from '../actions';
+import { AuthCard, authLink } from '../auth-card';
 
 export const metadata: Metadata = { title: fr.auth.title };
+
+const INFO: Record<string, string> = {
+  signed_out: 'Vous êtes déconnecté.',
+  password_updated: 'Mot de passe modifié. Connectez-vous avec votre nouveau mot de passe.',
+  account_deleted: 'Votre compte et toutes vos données ont été supprimés.',
+  email_confirmed: 'Adresse confirmée. Vous pouvez vous connecter.',
+  consent_withdrawn: 'Consentement retiré : l’accès est suspendu jusqu’à un nouveau consentement.',
+};
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const error = parseAuthError(params.erreur);
-  const next = safeRedirectPath(params.next);
+  const info = parseAuthInfo(params.message);
   return (
-    <main className="pattern-khatam flex min-h-dvh items-center justify-center bg-primary-900 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-paper p-8 shadow-xl">
-        <LogoMark className="mb-6 h-10 w-10 text-primary-900" />
-        <h1 className="text-2xl text-primary-900">{fr.auth.title}</h1>
-        <p className="mb-6 mt-1 text-sm text-ink-muted">{fr.auth.subtitle}</p>
-        {error ? <div className="mb-4"><Notice tone="warning">{fr.auth.errors[error]}</Notice></div> : null}
-        {isDemoMode ? <Notice>{fr.auth.demoDisabled}</Notice> : <SignInForm next={next} />}
-        <p className="mt-6 text-xs text-ink-muted">{fr.auth.noCredentials}</p>
-        {isDemoMode ? (
-          <Link href="/dashboard" className="mt-4 block text-center text-sm text-primary-700 underline-offset-4 hover:underline">{fr.auth.demo}</Link>
-        ) : null}
-      </div>
-    </main>
+    <AuthCard title={fr.auth.title} subtitle="Accédez à votre espace en toute sécurité."
+      footer={<>
+        <p><Link className={authLink} href="/mot-de-passe-oublie">Mot de passe oublié ?</Link></p>
+        <p>Pas encore de compte ? <Link className={authLink} href="/inscription">Créer un compte</Link></p>
+        {isDemoMode ? <p><Link className={authLink} href="/dashboard">{fr.auth.demo}</Link></p> : null}
+      </>}>
+      {info ? <div className="mb-4"><Notice>{INFO[info]}</Notice></div> : null}
+      {error ? <div className="mb-4"><Notice tone="warning">{fr.auth.errors[error]}</Notice></div> : null}
+      {isDemoMode ? null : (
+        <ActionForm action={signIn} submitLabel="Se connecter" testId="form-connexion">
+          <input type="hidden" name="next" value={safeRedirectPath(params.next)} />
+          <Field label="Adresse e-mail" name="email" type="email" autoComplete="email" required />
+          <Field label="Mot de passe" name="password" type="password" autoComplete="current-password" required />
+        </ActionForm>
+      )}
+    </AuthCard>
   );
 }

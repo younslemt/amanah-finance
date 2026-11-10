@@ -45,9 +45,9 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   const q = await Promise.all([
     supabase.from('accounts').select('id, name, type, currency, iban_last4, opening_balance_cents, archived').eq('household_id', hid),
     supabase.from('account_balances').select('account_id, balance_cents').eq('household_id', hid),
-    supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id'),
+    supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id, label'),
     supabase.from('budgets').select('category_slug, limit_cents, month').eq('household_id', hid).gte('month', since),
-    supabase.from('goals').select('id, kind, name, target_cents, target_date, status').eq('household_id', hid),
+    supabase.from('goals').select('id, kind, name, target_cents, target_date, status, monthly_capacity_cents').eq('household_id', hid).order('created_at'),
     supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on').eq('household_id', hid),
     supabase.from('assets').select('id, kind, name, value_cents, weight_mg, purity_permille, is_accessible, receivable_likely, account_id, details').eq('household_id', hid),
     supabase.from('liabilities').select('id, name, outstanding_cents, due_12m_cents').eq('household_id', hid),

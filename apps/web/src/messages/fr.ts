@@ -56,6 +56,7 @@ export const fr = {
     balance: 'Liquidités disponibles',
     netWorth: 'Patrimoine net',
     lastMonth: 'Mois écoulé',
+    thisMonth: 'Ce mois-ci',
     income: 'Revenus',
     expenses: 'Dépenses',
     savingsRate: 'Taux d’épargne',

@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '../env.ts';
 
-const PUBLIC_PATHS = ['/connexion', '/auth/callback', '/auth/signout'];
+const PUBLIC_PATHS = ['/connexion', '/inscription', '/mot-de-passe-oublie', '/auth/callback', '/auth/signout'];
+const GUEST_ONLY = ['/connexion', '/inscription', '/mot-de-passe-oublie'];
 
 /** Rafraîchit la session et protège les écrans de l'application (mode live uniquement). */
 export async function updateSession(request: NextRequest) {
@@ -44,6 +45,6 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }
-  if (userId && pathname === '/connexion') return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (userId && GUEST_ONLY.includes(pathname)) return NextResponse.redirect(new URL('/dashboard', request.url));
   return response;
 }
