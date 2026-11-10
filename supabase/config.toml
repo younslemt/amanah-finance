@@ -45,6 +45,6 @@ enroll_enabled = true
 verify_enabled = true
 
 # Boîte mail de test locale (liens de confirmation et de réinitialisation)
-[inbucket]
+[local_smtp]
 enabled = true
 port = 54324
