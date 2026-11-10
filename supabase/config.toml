@@ -20,17 +20,31 @@ sql_paths = ["./seed.sql"]
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+additional_redirect_urls = ["http://localhost:3000/**", "http://127.0.0.1:3000/**"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 enable_signup = true
+minimum_password_length = 10
+password_requirements = "letters_digits"
+
+[auth.rate_limit]
+# Local et CI uniquement : assez large pour les tests de bout en bout
+email_sent = 100
+sign_in_sign_ups = 300
+token_verifications = 300
 
 [auth.email]
 enable_signup = true
-enable_confirmations = false
+enable_confirmations = true
 double_confirm_changes = true
 otp_expiry = 3600
+max_frequency = "1s"
 
 [auth.mfa.totp]
 enroll_enabled = true
 verify_enabled = true
+
+# Boîte mail de test locale (liens de confirmation et de réinitialisation)
+[inbucket]
+enabled = true
+port = 54324
