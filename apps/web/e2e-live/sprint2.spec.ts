@@ -144,6 +144,7 @@ test.describe.serial('Sprint 2 — consentement, import et purification', () => 
     await expect(page.getByTestId('liste-confirmes').getByTestId('montant-a-purifier')).toContainText(euros('12,34 €'));
     await page.getByTestId('form-methodologie').getByLabel(/brut/).check();
     await page.getByTestId('form-methodologie').getByRole('button', { name: 'Enregistrer la méthodologie' }).click();
+    await expect(page.getByTestId('form-methodologie').getByRole('status')).toContainText('Méthodologie enregistrée');
     await page.reload();
     await expect(page.getByTestId('methodologie-actuelle')).toContainText('brut');
     await expect(page.getByTestId('liste-confirmes').getByTestId('montant-a-purifier')).toContainText(euros('17,63 €'));
