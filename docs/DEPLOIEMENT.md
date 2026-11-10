@@ -59,7 +59,10 @@ supabase status                # URL et clé anon locales
 pnpm --filter @amanah/web dev  # avec NEXT_PUBLIC_APP_MODE=live dans .env.local
 ```
 
-Les liens de connexion locaux arrivent dans la boîte de test de Supabase (URL affichée par `supabase status`).
+Les e-mails locaux (confirmation, réinitialisation) arrivent dans la boîte de test de Supabase :
+http://127.0.0.1:54324. Tests du parcours réel en local :
+`NEXT_PUBLIC_APP_MODE=live pnpm build && pnpm start`, puis `pnpm --filter @amanah/web test:e2e:live`
+(variables `E2E_SUPABASE_URL`, `E2E_SUPABASE_ANON_KEY`, `E2E_MAIL_URL` : voir le job `e2e-live` de la CI).
 `supabase db reset` réapplique toutes les migrations et `seed.sql` (prix fictifs uniquement).
 
 ### 4.2 Projet hébergé (quand tu le décides)
@@ -70,8 +73,11 @@ Les liens de connexion locaux arrivent dans la boîte de test de Supabase (URL a
    Ne jamais lancer `seed.sql` en production.
 3. *Authentication → URL Configuration* :
    - Site URL : l'URL de l'application.
-   - Redirect URLs : `<SITE_URL>/auth/callback` uniquement (pas de joker).
-4. *Authentication → Providers → Email* : connexion par lien magique activée ; mots de passe facultatifs.
+   - Redirect URLs : `<SITE_URL>/auth/callback**` uniquement (le lien porte la destination en paramètre).
+4. *Authentication → Providers → Email* : inscription activée, **confirmation de l'adresse obligatoire**,
+   mot de passe de 10 caractères minimum avec lettres et chiffres.
+   *Authentication → SMTP* : configurer un fournisseur d'e-mail avant d'ouvrir les inscriptions
+   (le service intégré de Supabase est limité et réservé aux tests).
 5. *Authentication → Multi-Factor* : TOTP activé.
 6. *Authentication → Rate Limits* : garder les limites par défaut ou plus strictes.
 7. *Project Settings → API* : récupérer l'URL et la clé anon ; ne jamais copier la clé service_role
