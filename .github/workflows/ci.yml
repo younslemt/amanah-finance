@@ -39,7 +39,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Cache du store pnpm
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/pnpm/store
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package.json') }}
@@ -173,7 +173,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Cache du store pnpm
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/pnpm/store
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml', '**/package.json') }}
