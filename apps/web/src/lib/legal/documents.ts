@@ -22,6 +22,8 @@ export interface LegalDocument {
 export const LEGAL_DRAFT_NOTICE = 'Texte provisoire — validation juridique requise avant toute utilisation publique.';
 
 const VERSION = '2026-11-brouillon-1';
+/** Sprint 2 : consentement article 9 séparé de l'accès à l'application. */
+const VERSION_2 = '2026-11-brouillon-2';
 
 export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   {
@@ -39,13 +41,15 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   },
   {
     kind: 'privacy',
-    version: VERSION,
+    version: VERSION_2,
     nature: 'acknowledgement',
     title: 'Information sur la protection des données',
     checkboxLabel: 'J’ai pris connaissance de l’information sur la protection de mes données.',
     body: [
       'Données traitées : adresse e-mail, profil (prénom ou pseudonyme, nom du foyer, région), données financières que vous saisissez (comptes, revenus, dépenses, budgets, objectifs).',
-      'Finalité : vous fournir le service d’organisation financière. Base légale : exécution du contrat (article 6.1.b du RGPD).',
+      'Finalité : vous fournir le service d’organisation financière (comptes, budget, import de relevés, tableau de bord). Base légale : exécution du contrat (article 6.1.b du RGPD).',
+      'Les fonctions de finance islamique (Zakat, purification, objectif Hajj, dons religieux) sont facultatives : elles ne sont activées qu’avec votre consentement explicite distinct, que vous pouvez retirer sans perdre l’accès au reste de l’application.',
+      'Relevés importés : le fichier est lu sur le serveur puis écarté ; seules les opérations que vous confirmez sont enregistrées.',
       'Hébergement : Union européenne. Aucune vente de données, aucune publicité. Aucun identifiant bancaire n’est collecté.',
       'Vos droits : accès, rectification, effacement (suppression du compte dans les paramètres), portabilité, opposition, et réclamation auprès de l’Autorité de protection des données (Belgique).',
       'Conservation : jusqu’à la suppression de votre compte.',
@@ -54,14 +58,16 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
   },
   {
     kind: 'special_category',
-    version: VERSION,
+    version: VERSION_2,
     nature: 'explicit_consent',
     title: 'Consentement explicite : données pouvant révéler une conviction religieuse',
     checkboxLabel: 'Je consens explicitement au traitement de données pouvant révéler mes convictions religieuses (usage des fonctions de finance islamique).',
     body: [
       'L’utilisation de fonctions comme la Zakat, la purification des intérêts ou un objectif Hajj peut révéler une conviction religieuse, donnée protégée par l’article 9 du RGPD.',
       'Ces données ne sont traitées qu’avec votre consentement explicite (article 9.2.a), uniquement pour vous fournir ces fonctions.',
-      'Vous pouvez retirer ce consentement à tout moment dans les paramètres. Le retrait ne remet pas en cause les traitements déjà effectués ; l’accès à l’application est alors suspendu jusqu’à un nouveau consentement ou la suppression de votre compte.',
+      'Ce consentement est facultatif : sans lui, vous utilisez normalement les comptes, le budget, l’import de relevés et le tableau de bord.',
+      'Dans un foyer partagé, vos données de finance islamique restent privées : les autres membres ne les voient que si vous choisissez de les partager et s’ils ont eux-mêmes donné ce consentement.',
+      'Vous pouvez retirer ce consentement à tout moment. Seules les fonctions de finance islamique sont alors fermées ; vous choisissez de conserver vos données (inaccessibles jusqu’à un nouveau consentement) ou de les effacer immédiatement. Le retrait ne remet pas en cause les traitements déjà effectués.',
       LEGAL_DRAFT_NOTICE,
     ].join('\n\n'),
   },
@@ -79,15 +85,38 @@ export interface ConsentRecord {
   granted: boolean;
   document_version: string;
   recorded_at: string;
+  /** Ordre d'enregistrement (migration 0011) ; prioritaire sur l'horodatage. */
+  seq?: number;
+}
+
+/** Documents exigés pour utiliser l'application (fonctions financières générales). */
+export const APP_DOCUMENTS: readonly LegalDocument[] = LEGAL_DOCUMENTS.filter((d) => d.kind !== 'special_category');
+/** Consentement article 9, demandé seulement à l'activation des fonctions de finance islamique. */
+export const RELIGIOUS_DOCUMENT: LegalDocument = LEGAL_DOCUMENTS.find((d) => d.kind === 'special_category')!;
+
+function latestOf(records: readonly ConsentRecord[], kind: LegalKind): ConsentRecord | undefined {
+  return records.filter((r) => r.kind === kind).sort((a, b) =>
+    (a.seq !== undefined && b.seq !== undefined ? b.seq - a.seq : 0) || (a.recorded_at < b.recorded_at ? 1 : a.recorded_at > b.recorded_at ? -1 : 0))[0];
 }
 
 /**
  * Documents encore à accepter : pour chaque document, l'enregistrement le plus
  * récent doit être une acceptation de la version en vigueur.
+ * Par défaut : uniquement les documents exigés pour accéder à l'application.
  */
-export function missingConsents(records: readonly ConsentRecord[], docs: readonly LegalDocument[] = LEGAL_DOCUMENTS): LegalKind[] {
+export function missingConsents(records: readonly ConsentRecord[], docs: readonly LegalDocument[] = APP_DOCUMENTS): LegalKind[] {
   return docs.filter((doc) => {
-    const latest = records.filter((r) => r.kind === doc.kind).sort((a, b) => (a.recorded_at < b.recorded_at ? 1 : -1))[0];
+    const latest = latestOf(records, doc.kind);
     return !latest || !latest.granted || latest.document_version !== doc.version;
   }).map((d) => d.kind);
+}
+
+/** Fonctions de finance islamique ouvertes : consentement article 9 en vigueur, version actuelle. */
+export function hasReligiousConsent(records: readonly ConsentRecord[]): boolean {
+  return missingConsents(records, [RELIGIOUS_DOCUMENT]).length === 0;
+}
+
+/** Dernier enregistrement d'un document (affichage dans les paramètres). */
+export function latestConsent(records: readonly ConsentRecord[], kind: LegalKind): ConsentRecord | undefined {
+  return latestOf(records, kind);
 }

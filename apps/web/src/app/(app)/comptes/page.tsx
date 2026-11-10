@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Card, CardTitle, Notice, PageHeader } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
@@ -16,6 +17,7 @@ export default async function AccountsPage() {
   return (
     <>
       <PageHeader title="Mes comptes" subtitle="Comptes saisis manuellement. Aucune banque n’est connectée." />
+      <p className="-mt-3 mb-4 text-sm"><Link href="/import" className="font-medium text-primary-700 underline-offset-4 hover:underline" data-testid="lien-import">Importer un relevé CSV</Link></p>
       <Card>
         <CardTitle>Comptes</CardTitle>
         {data.accounts.length === 0 ? <p className="text-ink-muted">Aucun compte pour le moment.</p> : (

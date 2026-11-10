@@ -59,6 +59,8 @@ export function AppShell({ children, demo, displayName = null }: { children: Rea
             <>
               {displayName ? <p className="text-sm text-ivory">{displayName}</p> : null}
               <Link href="/comptes" className="block text-sm underline-offset-4 hover:underline">Mes comptes</Link>
+              <Link href="/import" className="block text-sm underline-offset-4 hover:underline">Importer un relevé</Link>
+              <Link href="/finance-islamique" className="block text-sm underline-offset-4 hover:underline">Finance islamique</Link>
               <Link href="/parametres" className="block text-sm underline-offset-4 hover:underline">Paramètres</Link>
               <SignOut />
             </>

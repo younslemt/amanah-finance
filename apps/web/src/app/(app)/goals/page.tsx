@@ -4,6 +4,8 @@ import { ActionForm } from '@/components/forms/action-form';
 import { Field, SelectField } from '@/components/forms/fields';
 import { getSnapshot } from '@/lib/data';
 import { isDemoMode } from '@/lib/env';
+import { religiousAccess } from '@/lib/supabase/session';
+import { ReligiousGate } from '@/components/religious-gate';
 import { formatCents, formatDate } from '@/lib/format';
 import { interpolate } from '@/lib/i18n';
 import { addMonths } from '@amanah/engines';
@@ -16,6 +18,7 @@ const tone = { achieved: 'positive', on_track: 'positive', behind: 'warning', ov
 const paceLabel = { declared: 'Capacité mensuelle déclarée', observed: 'Rythme observé sur 3 mois', none: 'Rythme' } as const;
 
 export default async function GoalsPage() {
+  const { enabled: religious } = await religiousAccess();
   const s = await getSnapshot();
   const t = fr.goals;
   return (
@@ -61,9 +64,11 @@ export default async function GoalsPage() {
         ))}
       </div>
 
-      {!isDemoMode ? (
+      {!isDemoMode && !religious ? <div className="mt-4"><ReligiousGate feature="Objectif Hajj" next="/goals" /></div> : null}
+      {!isDemoMode && religious ? (
         <Card className="mt-4">
           <CardTitle>Nouvel objectif Hajj</CardTitle>
+          <p className="mb-3 text-xs text-ink-muted">Objectif personnel : privé dans un foyer partagé, sauf si vous choisissez de partager vos données de finance islamique.</p>
           <ActionForm action={createHajjGoal} submitLabel="Créer l’objectif" testId="form-hajj" className="grid gap-3 sm:grid-cols-2">
             <Field label="Nom de l’objectif" name="name" defaultValue="Hajj" required maxLength={120} />
             <Field label="Montant cible (€)" name="target" inputMode="decimal" required hint="Estimation de votre budget total." />

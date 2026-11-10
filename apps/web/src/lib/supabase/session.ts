@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from './server.ts';
-import { missingConsents, type ConsentRecord } from '../legal/documents.ts';
+import { hasReligiousConsent, missingConsents, type ConsentRecord } from '../legal/documents.ts';
 import { nextOnboardingStep } from '../onboarding.ts';
 import { isDemoMode } from '../env.ts';
 
@@ -20,6 +20,8 @@ export interface SessionContext {
   displayName: string | null;
   profileCompleted: boolean;
   consents: ConsentRecord[];
+  /** Consentement article 9 en vigueur : fonctions de finance islamique ouvertes. */
+  religiousEnabled: boolean;
 }
 
 export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
@@ -32,7 +34,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     supabase.from('household_members').select('household_id, role').eq('user_id', auth.user.id)
       .order('joined_at', { ascending: true }).limit(1).maybeSingle(),
     supabase.from('profiles').select('display_name, profile_completed_at').eq('id', auth.user.id).maybeSingle(),
-    supabase.from('consents').select('kind, granted, document_version, recorded_at').eq('user_id', auth.user.id),
+    supabase.from('consents').select('kind, granted, document_version, recorded_at, seq').eq('user_id', auth.user.id),
   ]);
   if (membership.error) throw membership.error;
   if (!membership.data) throw new Error('Aucun foyer associé au compte');
@@ -47,6 +49,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     displayName: (profile.data?.display_name as string | null) ?? null,
     profileCompleted: Boolean(profile.data?.profile_completed_at),
     consents: (consents.data ?? []) as ConsentRecord[],
+    religiousEnabled: hasReligiousConsent((consents.data ?? []) as ConsentRecord[]),
   };
 });
 
@@ -64,4 +67,15 @@ export async function requireOnboardedSession(): Promise<SessionContext> {
   const step = nextOnboardingStep({ missingConsents: missingConsents(ctx.consents), profileCompleted: ctx.profileCompleted });
   if (step) redirect(step);
   return ctx;
+}
+
+/**
+ * Accès aux fonctions de finance islamique (Zakat, purification, Hajj, dons religieux).
+ * Démonstration : ouvertes (données fictives). Réel : consentement article 9 en vigueur.
+ * La base l'impose aussi (RLS, migration 0011) : ce contrôle sert l'affichage.
+ */
+export async function religiousAccess(): Promise<{ enabled: boolean; ctx: SessionContext | null }> {
+  if (isDemoMode) return { enabled: true, ctx: null };
+  const ctx = await requireOnboardedSession();
+  return { enabled: ctx.religiousEnabled, ctx };
 }

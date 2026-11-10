@@ -5,7 +5,8 @@ import { ActionForm } from '@/components/forms/action-form';
 import { Field, SelectField } from '@/components/forms/fields';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession } from '@/lib/supabase/session';
-import { LEGAL_DOCUMENTS } from '@/lib/legal/documents';
+import Link from 'next/link';
+import { APP_DOCUMENTS } from '@/lib/legal/documents';
 import { formatDate } from '@/lib/format';
 import { deleteAccount, saveProfile, withdrawConsent } from '../../(onboarding)/actions';
 
@@ -39,7 +40,7 @@ export default async function SettingsPage() {
       <Card className="mt-4">
         <CardTitle>Consentements</CardTitle>
         <ul className="divide-y divide-line">
-          {LEGAL_DOCUMENTS.map((d) => {
+          {APP_DOCUMENTS.map((d) => {
             const r = latest(d.kind);
             return (
               <li key={d.kind} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -59,12 +60,23 @@ export default async function SettingsPage() {
             );
           })}
         </ul>
-        <p className="mt-3 text-xs text-ink-muted">Le retrait suspend l’accès à l’application jusqu’à un nouveau consentement. L’historique de vos choix est conservé comme preuve.</p>
+        <p className="mt-3 text-xs text-ink-muted">Le retrait des conditions d’utilisation suspend l’accès à l’application jusqu’à une nouvelle acceptation. L’historique de vos choix est conservé comme preuve.</p>
+      </Card>
+
+      <Card className="mt-4">
+        <CardTitle>Finance islamique</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-muted">Consentement explicite distinct (article 9 du RGPD), facultatif et retirable sans perdre l’accès au budget.</p>
+          <Badge tone={ctx.religiousEnabled ? 'positive' : 'neutral'}>{ctx.religiousEnabled ? 'Activée' : 'Désactivée'}</Badge>
+        </div>
+        <Link href="/finance-islamique" className="mt-3 inline-block text-sm font-medium text-primary-700 underline-offset-4 hover:underline">
+          {ctx.religiousEnabled ? 'Gérer la confidentialité ou retirer mon consentement' : 'Activer les fonctions de finance islamique'}
+        </Link>
       </Card>
 
       <Card className="mt-4">
         <CardTitle>Supprimer mon compte</CardTitle>
-        <Notice tone="warning">La suppression efface définitivement votre compte, votre profil et vos consentements. Si vous êtes seul dans votre foyer, toutes ses données sont effacées ; si d’autres personnes en font partie, les données communes leur restent et votre nom en est retiré. Elle ne peut pas être annulée.</Notice>
+        <Notice tone="warning">La suppression efface définitivement votre compte, votre profil et vos consentements. Si vous êtes seul dans votre foyer, toutes ses données sont effacées ; si d’autres personnes en font partie, les données communes leur restent, votre nom en est retiré et vos données de finance islamique sont effacées. Elle ne peut pas être annulée.</Notice>
         <ActionForm action={deleteAccount} submitLabel="Supprimer définitivement" variant="danger" className="mt-3" testId="form-suppression">
           <Field label="Saisissez SUPPRIMER pour confirmer" name="confirmation" autoComplete="off" required />
         </ActionForm>

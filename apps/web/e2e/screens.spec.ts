@@ -96,3 +96,21 @@ test('la connexion est désactivée en démonstration', async ({ page }) => {
   await expect(page.getByText(/La connexion est désactivée en mode démonstration/)).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);
 });
+
+// Sprint 2 : écrans hors barre de navigation, désactivés ou explicatifs en démonstration
+for (const s of [
+  { path: '/import', heading: 'Importer un relevé', text: 'désactivé en démonstration' },
+  { path: '/finance-islamique', heading: 'Finance islamique', text: 'consentement explicite distinct' },
+] as const) {
+  test(`écran ${s.path} (démonstration) : rendu, mise en page, contraste`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(s.path);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(s.heading);
+    await expect(page.getByRole('note').filter({ hasText: s.text })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, 'défilement horizontal').toBeLessThanOrEqual(0);
+    expect(await contrastFailures(page)).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
