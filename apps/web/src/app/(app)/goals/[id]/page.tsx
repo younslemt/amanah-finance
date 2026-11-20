@@ -53,7 +53,11 @@ function EidSection({ row, goalDate, realized, plans, editable }: { row: EidPlan
         <div data-testid="date-aid">
           <p className="mb-2 text-sm font-semibold text-primary-900">Date</p>
           <p className="text-sm">Date retenue : <strong>{formatDate(goalDate)}</strong></p>
-          <p className="mt-1"><Badge tone={label === 'confirmed_by_user' ? 'positive' : 'warning'}>{label === 'confirmed_by_user' ? `Confirmée par vous — source : ${plan.dateSource}` : 'Saisie, non confirmée'}</Badge></p>
+          {/* Source saisie par la personne : texte libre, renvoyé à la ligne (jamais dans un badge, qui ne se coupe pas sur mobile) */}
+          <p className="mt-1 break-words text-sm">
+            <Badge tone={label === 'confirmed_by_user' ? 'positive' : 'warning'}>{label === 'confirmed_by_user' ? 'Confirmée par vous' : 'Saisie, non confirmée'}</Badge>
+            {label === 'confirmed_by_user' ? <span className="ml-1"> — source : {plan.dateSource}</span> : null}
+          </p>
           {plan.estimatedDate ? <p className="mt-2 text-xs text-ink-muted">Estimation indicative au moment de la saisie (calendrier tabulaire, non officielle) : {formatDate(plan.estimatedDate)}.</p> : null}
         </div>
       </div>

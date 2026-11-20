@@ -130,6 +130,8 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await date.getByLabel('Source de la date (si confirmée)').fill('Annonce fictive de la mosquée');
     await date.getByRole('button', { name: 'Enregistrer la date' }).click();
     await expect(page.getByTestId('date-aid')).toContainText('Confirmée par vous — source : Annonce fictive de la mosquée');
+    // Texte libre saisi : aucun débordement horizontal sur mobile
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(page.getByTestId('historique-modifications')).toContainText('Date de l’Aïd : saisie, non confirmée → confirmée');
     await expect(page.getByTestId('reconduction-aid')).toContainText('Disponible après la réalisation');
   });
