@@ -6,7 +6,7 @@ import { formError, formOk, type FormState } from '@/lib/form-state';
 import { isReligiousGoal } from '@amanah/engines';
 import {
   accountSchema, allocationSchema, budgetSchema, categorySchema, customCategorySlug, fieldErrorsOf,
-  formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, transactionSchema,
+  declaredCapacitySchema, formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, savingsPlanSchema, transactionSchema,
 } from '@/lib/validation';
 
 /**
@@ -145,6 +145,37 @@ export async function setGoalLifecycle(_p: FormState, fd: FormData): Promise<For
   if (count !== 1) return formError('Projet introuvable ou non modifiable.');
   const msg = { achieve: 'Projet marqué comme réalisé.', reopen: 'Projet rouvert.', pause: 'Projet mis en pause : il sort de la planification.', resume: 'Projet repris.', archive: 'Projet archivé : son historique est conservé.' }[d.action];
   return done(msg);
+}
+
+/**
+ * Plan d'épargne : montant mensuel prévu et priorité de chaque projet. Rien n'est versé ni
+ * dépensé ; la base journalise chaque changement de projet (goal_changes).
+ */
+export async function saveSavingsPlan(_p: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const parsed = savingsPlanSchema.safeParse({
+    goalIds: fd.getAll('goalId').map(String), monthly: fd.getAll('monthly').map(String), priority: fd.getAll('priority').map(String),
+  });
+  if (!parsed.success) return formError('Vérifiez les montants et les priorités.', fieldErrorsOf(parsed.error));
+  const d = parsed.data;
+  for (let i = 0; i < d.goalIds.length; i++) {
+    // RLS : un projet religieux d'une autre personne n'est ni visible ni modifiable
+    const { error } = await ctx.supabase.from('goals').update({ monthly_capacity_cents: d.monthly[i], priority: d.priority[i] })
+      .eq('id', d.goalIds[i]!).eq('household_id', ctx.householdId);
+    if (error) return dbError('savings plan', error);
+  }
+  return done('Plan d’épargne enregistré. Aucune somme n’est déplacée : ce sont des mises de côté prévues.');
+}
+
+export async function saveDeclaredCapacity(_p: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const parsed = declaredCapacitySchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Vérifiez le montant.', fieldErrorsOf(parsed.error));
+  const { error } = await ctx.supabase.from('household_savings_settings').upsert({
+    household_id: ctx.householdId, declared_capacity_cents: parsed.data.capacity, updated_at: new Date().toISOString(),
+  }, { onConflict: 'household_id' });
+  if (error) return dbError('declared capacity', error);
+  return done(parsed.data.capacity === null ? 'Capacité déclarée retirée : l’estimation de l’analyse est utilisée.' : 'Capacité d’épargne mensuelle enregistrée.');
 }
 
 export async function allocateToGoal(_p: FormState, fd: FormData): Promise<FormState> {

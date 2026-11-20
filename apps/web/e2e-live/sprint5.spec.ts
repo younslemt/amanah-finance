@@ -94,6 +94,7 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await form.getByRole('button', { name: 'Créer l’objectif' }).click();
     await expect(page.getByRole('article').filter({ hasText: 'Omra' })).toContainText('privé');
 
+    await page.context().clearCookies(); // fin de session de K avant l'inscription de L
     const { sentAt } = await signUpAndConfirm(page, L);
     await page.goto(await latestLink(L.email, 'signup', sentAt));
     await completeOnboarding(page, L.name);
@@ -158,5 +159,44 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await again.getByLabel('Effort d’épargne mensuel (€)').fill('50');
     await again.getByRole('button', { name: 'Créer l’Aïd de l’année suivante' }).click();
     await expect(again.getByRole('alert')).toContainText('déjà');
+  });
+
+  test('plan d’épargne : capacité, répartition, priorités, dépassement ; R7 expliquée', async ({ page }) => {
+    await signIn(page, K);
+    await page.goto('/budget');
+    await page.getByTestId('lien-plan-epargne').click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plan d’épargne des projets');
+    await page.getByTestId('form-capacite').getByLabel('Capacité mensuelle (€)').fill('500');
+    await page.getByTestId('form-capacite').getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(page.getByTestId('synthese-plan')).toContainText(euros('500,00 €'));
+    await expect(page.getByTestId('synthese-plan')).toContainText('déclarée par vous');
+
+    // Montants prévus : Études 100 €, Omra 150 €, Aïd 50 € → 300 € affectés, 200 € libres
+    const plan = page.getByTestId('form-plan-epargne');
+    await plan.getByLabel('Montant mensuel pour « Études fictives » (€)').fill('100');
+    await plan.getByLabel('Montant mensuel pour « Omra » (€)').fill('150');
+    await plan.getByLabel(/Montant mensuel pour « Aïd al-Adha \d{4} » \(€\)/).fill('50');
+    await plan.getByRole('button', { name: 'Enregistrer le plan' }).click();
+    await expect(page.getByTestId('synthese-plan')).toContainText(euros('300,00 €'));
+    await expect(page.getByTestId('synthese-plan')).toContainText(euros('200,00 €'));
+    await expect(page.getByTestId('synthese-plan')).toContainText('Plan équilibré');
+
+    // Dépassement : capacité 200 € pour 300 € prévus, le projet le moins prioritaire n'est pas couvert en entier
+    await page.getByTestId('form-capacite').getByLabel('Capacité mensuelle (€)').fill('200');
+    await page.getByTestId('form-capacite').getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(page.getByTestId('synthese-plan')).toContainText('Le plan dépasse votre capacité');
+    await expect(page.getByTestId('lignes-plan')).toContainText('Capacité insuffisante');
+
+    // Priorités modifiables : le premier projet passe en priorité 1
+    await page.getByTestId('form-plan-epargne').getByRole('combobox').first().selectOption('1');
+    await page.getByTestId('form-plan-epargne').getByRole('button', { name: 'Enregistrer le plan' }).click();
+    await expect(page.getByTestId('ligne-plan').first()).toContainText('Priorité 1');
+
+    // R7 : les études (100 €/mois) ne tiendront pas leur date souhaitée
+    await page.goto('/recommandations');
+    const r7 = page.locator('[data-rule="R7"]').first();
+    await expect(r7).toContainText('Projet en retard');
+    await expect(r7).toContainText('Scénarios possibles');
+    await expect(r7).toContainText('Effort d’épargne actuel');
   });
 });

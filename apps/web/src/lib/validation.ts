@@ -154,6 +154,17 @@ export const eidDateSchema = z.object({ goalId: z.string().uuid('Projet invalide
 export const eidBudgetSchema = z.object({ goalId: z.string().uuid('Projet invalide.'), ...eidBudgetFields })
   .refine(budgetOk, { path: ['family'], message: 'Les contributions familiales couvrent tout le budget : rien à mettre de côté.' });
 
+/** Plan d'épargne : un montant mensuel et une priorité par projet (lignes parallèles du formulaire). */
+export const savingsPlanSchema = z.object({
+  goalIds: z.array(z.string().uuid('Projet invalide.')).min(1, 'Aucun projet à planifier.').max(50),
+  monthly: z.array(amount('Montant mensuel')).max(50),
+  priority: z.array(z.coerce.number().int().min(1, 'Priorité de 1 à 5.').max(5, 'Priorité de 1 à 5.')).max(50),
+}).refine((d) => d.monthly.length === d.goalIds.length && d.priority.length === d.goalIds.length, { message: 'Formulaire incomplet.' });
+
+export const declaredCapacitySchema = z.object({
+  capacity: z.string().trim().optional().transform((v) => v || null).pipe(amount('Capacité d’épargne mensuelle').nullable()),
+});
+
 export const simulationSchema = z.object({ monthly: amount('Épargne mensuelle simulée') });
 
 export const allocationSchema = z.object({

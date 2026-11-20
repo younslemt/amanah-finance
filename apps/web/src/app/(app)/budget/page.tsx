@@ -34,8 +34,16 @@ export default async function BudgetPage() {
         <a href="#evolution" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Évolution</a>
         <a href="#recurrentes" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Charges récurrentes</a>
         <a href="#mes-donnees" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Mes données</a>
-        <Link href="/budget/optimiser" data-testid="lien-optimiser" className="ml-auto rounded-lg bg-primary-800 px-4 py-2 font-medium text-ivory hover:bg-primary-700">Optimiser mon budget</Link>
+        <Link href="/budget/plan-epargne" data-testid="lien-plan-epargne" className="ml-auto rounded-lg border border-line bg-paper px-4 py-2 font-medium text-primary-800 hover:bg-mist">Épargne des projets</Link>
+        <Link href="/budget/optimiser" data-testid="lien-optimiser" className="rounded-lg bg-primary-800 px-4 py-2 font-medium text-ivory hover:bg-primary-700">Optimiser mon budget</Link>
       </nav>
+      {s.savingsPlan.lines.length > 0 ? (
+        <p className="mb-3 text-sm text-ink-muted" data-testid="resume-plan">
+          Épargne prévue pour vos projets : {formatCents(s.savingsPlan.assignedCents)} par mois
+          {s.savingsPlan.capacityCents !== null ? ` sur une capacité de ${formatCents(s.savingsPlan.capacityCents)}` : ''}
+          {s.savingsPlan.overcommittedCents > 0 ? ` — dépassement de ${formatCents(s.savingsPlan.overcommittedCents)}` : ''}. Ces mises de côté ne sont pas des dépenses.
+        </p>
+      ) : null}
       <div id="ce-mois" />
 
       <div className="grid gap-4 sm:grid-cols-3">

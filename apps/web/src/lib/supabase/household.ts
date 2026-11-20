@@ -63,6 +63,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     // Sprint 4 : prix des métaux saisis par la personne (article 9 : vides sans consentement)
     supabase.from('zakat_metal_prices').select('symbol, price_per_g_cents, as_of, source').eq('household_id', hid).eq('owner_id', auth.user.id)
       .order('as_of', { ascending: false }).limit(40),
+    supabase.from('household_savings_settings').select('declared_capacity_cents').eq('household_id', hid).maybeSingle(),
   ]);
   const failed = q.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -91,6 +92,8 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   data.notRecurring = ((q[12].data ?? []) as Array<{ series_key: string }>).map((r) => r.series_key);
   data.transferDecisions = ((q[14].data ?? []) as Array<{ debit_id: string; credit_id: string; verdict: 'confirmed' | 'rejected' }>)
     .map((r) => [`${r.debit_id}|${r.credit_id}`, r.verdict] as [string, 'confirmed' | 'rejected']);
+  const declared = (q[16].data as { declared_capacity_cents: number | string | null } | null)?.declared_capacity_cents;
+  data.declaredSavingsCapacityCents = declared === null || declared === undefined ? null : Number(declared);
   // Une recommandation reportée réapparaît à la date choisie
   data.hiddenRecommendations = ((q[13].data ?? []) as Array<{ fingerprint: string; status: string; snooze_until: string | null }>)
     .filter((r) => r.status !== 'snoozed' || (r.snooze_until !== null && r.snooze_until > asOf)).map((r) => r.fingerprint);

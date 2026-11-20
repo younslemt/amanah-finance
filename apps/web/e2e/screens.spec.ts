@@ -9,6 +9,7 @@ const SCREENS = [
   { path: '/dashboard', heading: 'Assalamu alaykum', nav: 'Accueil' },
   { path: '/budget', heading: 'Budget', nav: 'Budget' },
   { path: '/budget/optimiser', heading: 'Optimiser mon budget', nav: 'Budget' },
+  { path: '/budget/plan-epargne', heading: 'Plan d’épargne des projets', nav: 'Budget' },
   { path: '/recommandations', heading: 'Mes recommandations', nav: 'Accueil' },
   { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
   { path: '/goals/goal-hajj', heading: 'Hajj en couple', nav: 'Projets' },

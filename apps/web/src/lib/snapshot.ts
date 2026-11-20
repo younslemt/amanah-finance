@@ -4,7 +4,7 @@
  */
 import {
   analyzeFinances, recommend, type AnalysisBudget, type AnalysisCategory, type CategoryNature, type FinancialAnalysis, type Recommendation,
-  calculateZakat, computeNetWorth, detectInterest, isPlannable, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
+  buildSavingsPlan, calculateZakat, computeNetWorth, detectInterest, isPlannable, type SavingsPlan, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
   type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
   summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
   type PreparedZakat, type PriceEntry, type ZakatChoices, type ZakatResult, prepareZakat,
@@ -36,6 +36,8 @@ export interface HouseholdData {
   prices: { gold: MetalPrice | null; silver: MetalPrice | null };
   /** Prix saisis (personnels ou de référence), avec leur source. */
   priceEntries?: PriceEntry[];
+  /** Capacité d'épargne mensuelle déclarée par le foyer (prime sur l'estimation). */
+  declaredSavingsCapacityCents?: number | null;
   /** Choix Zakat de la personne connectée : rien n'est supposé. */
   zakat: { choices: ZakatChoices };
   emergencyFundMonths: 3 | 6;
@@ -58,6 +60,8 @@ export interface HouseholdSnapshot {
   /** Analyse financière des mois complets (Sprint 3). */
   analysis: FinancialAnalysis;
   recommendations: Recommendation[];
+  /** Plan d'épargne des projets (Sprint 5). */
+  savingsPlan: SavingsPlan;
 }
 
 const LIQUID = new Set(['current', 'savings', 'regulated_savings', 'cash']);
@@ -121,6 +125,12 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     analysis, hidden: new Set(data.hiddenRecommendations ?? []),
     // Projets en pause ou réalisés : hors planification (pas de recommandation de rattrapage)
     goals: goals.filter((g) => isPlannable(g.goal)).map((g) => ({ ...g, paceCents: observedMonthlyPace(data.allocations, g.goal.id, data.asOf) })),
+    asOf: data.asOf, allocations: data.allocations,
+  });
+  // Plan d'épargne : répartition de la capacité entre projets, sans double allocation (lot 5.3)
+  const savingsPlan = buildSavingsPlan({
+    asOf: data.asOf, estimatedCapacityCents: analysis.capacity.estimatedCents,
+    declaredCapacityCents: data.declaredSavingsCapacityCents ?? null, goals, allocations: data.allocations,
   });
 
   return {
@@ -136,5 +146,6 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     purification: { candidates, detectedCreditedCents: candidates.reduce((s, c) => s + c.creditedCents, 0), summary: data.purificationItems ? summarizePurification(data.purificationItems) : null },
     analysis,
     recommendations,
+    savingsPlan,
   };
 }

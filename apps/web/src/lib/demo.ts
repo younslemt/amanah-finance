@@ -94,6 +94,8 @@ export function getDemoHousehold(): HouseholdData {
         longTermInvestments: 'full_market_value', lockedPensions: 'exclude', debts: 'due_12_months', excludedSourceIds: [],
       },
     },
+    // Capacité d'épargne déclarée fictive (plan des projets)
+    declaredSavingsCapacityCents: 50_000,
     emergencyFundMonths: 3,
   };
 }
