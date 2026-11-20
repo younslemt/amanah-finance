@@ -59,7 +59,7 @@ test.describe.serial('Sprint 4 — dons, Sadaqah et Zakat personnalisée', () =>
     await expect(settings.getByRole('radio', { checked: true })).toHaveCount(0);
 
     const price = page.getByTestId('form-prix');
-    await price.getByLabel('Métal', { exact: true }).selectOption('XAG');
+    await price.getByRole('combobox', { name: /^Métal/ }).selectOption('XAG');
     await price.getByLabel('Prix par gramme de métal fin (€)').fill('1,30');
     await price.getByLabel('Source', { exact: true }).fill('Cotation fictive de test');
     await price.getByRole('button', { name: 'Enregistrer le prix' }).click();
