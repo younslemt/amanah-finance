@@ -11,7 +11,7 @@ import { activateReligiousFeatures, saveReligiousSharing, withdrawReligiousConse
 
 export const metadata: Metadata = { title: 'Finance islamique' };
 
-const NEXT = new Set(['/goals', '/zakat', '/purification']);
+const NEXT = new Set(['/goals', '/zakat', '/zakat/al-fitr', '/purification', '/dons']);
 
 export default async function IslamicFinancePage({ searchParams }: { searchParams: Promise<{ suite?: string; retrait?: string }> }) {
   const { suite, retrait } = await searchParams;
@@ -24,6 +24,8 @@ export default async function IslamicFinancePage({ searchParams }: { searchParam
           <CardTitle>Fonctions disponibles</CardTitle>
           <ul className="grid gap-2 sm:grid-cols-3">
             <li><Link href="/zakat" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Zakat (estimation)</Link></li>
+            <li><Link href="/zakat/al-fitr" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Zakat al-Fitr</Link></li>
+            <li><Link href="/dons" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Dons et Sadaqah</Link></li>
             <li><Link href="/purification" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Purification des intérêts</Link></li>
             <li><Link href="/goals" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Objectif Hajj</Link></li>
           </ul>
@@ -77,6 +79,8 @@ export default async function IslamicFinancePage({ searchParams }: { searchParam
               <li><Link href="/purification" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Purification des intérêts</Link></li>
               <li><Link href="/goals" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Objectif Hajj</Link></li>
               <li><Link href="/zakat" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Zakat (estimation)</Link></li>
+              <li><Link href="/zakat/al-fitr" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Zakat al-Fitr</Link></li>
+              <li><Link href="/dons" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Dons et Sadaqah</Link></li>
             </ul>
           </Card>
 

@@ -5,7 +5,7 @@ import { Card, CardTitle } from '@/components/ui';
  * Affiché à la place d'une fonction de finance islamique tant que le consentement
  * article 9 n'est pas en vigueur. Le reste de l'application reste accessible.
  */
-export function ReligiousGate({ feature, next }: { feature: string; next: '/goals' | '/zakat' | '/purification' }) {
+export function ReligiousGate({ feature, next }: { feature: string; next: '/goals' | '/zakat' | '/zakat/al-fitr' | '/purification' | '/dons' }) {
   return (
     <Card>
       <CardTitle>{feature} : fonction désactivée</CardTitle>

@@ -7,7 +7,7 @@ import {
   calculateZakat, computeNetWorth, detectInterest, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
   type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
   summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
-  type ZakatOptions, type ZakatResult,
+  type PreparedZakat, type PriceEntry, type ZakatChoices, type ZakatResult, prepareZakat,
 } from '@amanah/engines';
 
 export interface HouseholdAccount { id: string; name: string; type: string; balanceCents: number; ibanLast4?: string; countsAsReserve?: boolean | null }
@@ -34,7 +34,10 @@ export interface HouseholdData {
   assets: ZakatAsset[];
   liabilities: ZakatLiability[];
   prices: { gold: MetalPrice | null; silver: MetalPrice | null };
-  zakat: { options: ZakatOptions; hawlStart?: string };
+  /** Prix saisis (personnels ou de référence), avec leur source. */
+  priceEntries?: PriceEntry[];
+  /** Choix Zakat de la personne connectée : rien n'est supposé. */
+  zakat: { choices: ZakatChoices };
   emergencyFundMonths: 3 | 6;
   /** Mode réel : éléments de purification visibles (consentement article 9) ; absent en démonstration. */
   purificationItems?: PurificationItem[];
@@ -49,7 +52,8 @@ export interface HouseholdSnapshot {
   previousMonths: MonthSummary[];
   emergencyFund: ReturnType<typeof planEmergencyFund>;
   goals: Array<{ goal: Goal; plan: GoalPlan }>;
-  zakat: ZakatResult;
+  /** Résultat nul tant qu'un choix méthodologique nécessaire manque (voir prepared.missing). */
+  zakat: { result: ZakatResult | null; prepared: PreparedZakat };
   purification: { candidates: PurificationCandidate[]; detectedCreditedCents: number; summary: PurificationSummary | null };
   /** Analyse financière des mois complets (Sprint 3). */
   analysis: FinancialAnalysis;
@@ -94,15 +98,11 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
   const allocated = goals.reduce((s, g) => s + g.plan.savedCents, 0);
   const emergencyFund = planEmergencyFund(avgEssential, data.emergencyFundMonths, Math.max(0, totalBalance - allocated));
 
-  const zakat = calculateZakat({
-    asOf: data.asOf,
-    currency: 'EUR',
-    hawlStart: data.zakat.hawlStart,
-    prices: data.prices,
-    assets: data.assets,
-    liabilities: data.liabilities,
-    options: data.zakat.options,
+  const prepared = prepareZakat({
+    asOf: data.asOf, currency: 'EUR', choices: data.zakat.choices,
+    assets: data.assets, liabilities: data.liabilities, prices: data.prices,
   });
+  const zakat = { result: prepared.input ? calculateZakat(prepared.input) : null, prepared };
 
   const candidates = detectInterest(data.transactions);
 

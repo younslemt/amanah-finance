@@ -8,6 +8,8 @@ export * from './purification.ts';
 export * from './csv.ts';
 export * from './wealth.ts';
 export * from './zakat/engine.ts';
+export * from './zakat/settings.ts';
+export * from './contributions.ts';
 export { ZAKAT_RULESET, ENGINE_VERSION, type ReferenceId } from './zakat/ruleset.ts';
 export * from './analysis.ts';
 export * from './optimization.ts';

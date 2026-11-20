@@ -104,7 +104,7 @@ export function rest(token: string, path: string, init: RequestInit = {}) {
 export const euros = (s: string) => new RegExp(s.replace(/ /g, '[\\s\\u00a0\\u202f]').replace(',', ','));
 
 /** Active les fonctions de finance islamique depuis l'écran qui les demande (consentement article 9). */
-export async function activateIslamicFinance(page: Page, from: '/goals' | '/zakat' | '/purification') {
+export async function activateIslamicFinance(page: Page, from: '/goals' | '/zakat' | '/purification' | '/dons') {
   await page.goto(from);
   await page.getByTestId('lien-activer-finance-islamique').click();
   await expect(page).toHaveURL(/\/finance-islamique/);

@@ -163,3 +163,94 @@ export function parseAdjustments(raw: unknown): unknown {
   if (typeof raw !== 'string' || raw.length > 20_000) return null;
   try { return JSON.parse(raw); } catch { return null; }
 }
+
+// --- Dons et Zakat (Sprint 4) -----------------------------------------------------
+/** Champ absent (bouton radio non coché) ou vide : « non choisi ». */
+const emptyToNull = (v: unknown) => (v === undefined || (typeof v === 'string' && v.trim() === '') ? null : v);
+const optionalUuid = z.preprocess(emptyToNull, z.string().uuid('Sélection invalide.').nullable().optional());
+
+/** Dons saisis par l'utilisateur : jamais de purification (elle naît du parcours de purification). */
+export const DECLARABLE_KINDS = ['zakat', 'zakat_al_fitr', 'sadaqah', 'waqf', 'other'] as const;
+export const contributionSchema = z.object({
+  kind: z.enum(DECLARABLE_KINDS, { message: 'Choisissez le type de don.' }),
+  amount: amount('Montant', { min: 1 }),
+  paidOn: isoDate('Date du don'),
+  beneficiary: z.string().trim().min(1, 'Indiquez le bénéficiaire.').max(120, 'Nom du bénéficiaire trop long.'),
+  note: z.string().trim().max(300, 'Note trop longue (300 caractères au plus).').optional().transform((v) => v || null),
+  zakatCalculationId: optionalUuid,
+  zakatFitrId: optionalUuid,
+}).superRefine((d, ctx) => {
+  if (d.zakatCalculationId && d.kind !== 'zakat') ctx.addIssue({ code: 'custom', path: ['zakatCalculationId'], message: 'Seule une Zakat peut être affectée à un calcul de Zakat.' });
+  if (d.zakatFitrId && d.kind !== 'zakat_al_fitr') ctx.addIssue({ code: 'custom', path: ['zakatFitrId'], message: 'Seule une Zakat al-Fitr peut être affectée à une Zakat al-Fitr.' });
+});
+
+export const contributionLinkSchema = z.object({
+  id: z.string().uuid('Don invalide.'),
+  transactionId: z.preprocess(emptyToNull, z.string().uuid('Opération invalide.').nullable()),
+});
+
+export const fitrSchema = z.object({
+  year: z.coerce.number({ message: 'Année invalide.' }).int('Année invalide.').min(2000, 'Année invalide.').max(2100, 'Année invalide.'),
+  persons: z.coerce.number({ message: 'Nombre de personnes invalide.' }).int('Nombre entier requis.').min(1, 'Au moins une personne.').max(30, '30 personnes au plus.'),
+  amountPerPerson: amount('Montant par personne', { min: 1 }).refine((v) => v <= 100_000, 'Montant par personne : 1 000 € au plus.'),
+  source: z.string().trim().min(3, 'Indiquez d’où vient ce montant (mosquée, organisme, avis suivi…).').max(200, 'Source trop longue.'),
+});
+
+export const metalPriceSchema = z.object({
+  symbol: z.enum(['XAU', 'XAG'], { message: 'Choisissez le métal.' }),
+  pricePerGram: amount('Prix par gramme', { min: 1 }),
+  asOf: isoDate('Date du prix'),
+  source: z.string().trim().min(3, 'Indiquez la source du prix.').max(200, 'Source trop longue.'),
+});
+
+const choice = <T extends readonly [string, ...string[]]>(values: T) => z.preprocess(emptyToNull, z.enum(values).nullable());
+export const zakatSettingsSchema = z.object({
+  nisabBasis: choice(['gold', 'silver'] as const),
+  yearBasis: choice(['lunar', 'solar'] as const),
+  hawlStart: z.preprocess(emptyToNull, isoDate('Début du Hawl').nullable()),
+  personalJewelry: choice(['include', 'exclude'] as const),
+  longTermInvestments: choice(['full_market_value', 'custom_ratio'] as const),
+  longTermRatioPercent: z.preprocess(emptyToNull, z.coerce.number({ message: 'Part invalide.' }).min(0, 'Entre 0 et 100 %.').max(100, 'Entre 0 et 100 %.').nullable()),
+  lockedPensions: choice(['exclude', 'include'] as const),
+  debts: choice(['due_12_months', 'none', 'all'] as const),
+  excluded: z.array(z.string().regex(/^(account:)?[0-9a-f-]{36}$/)).max(500),
+}).superRefine((d, ctx) => {
+  if (d.longTermInvestments === 'custom_ratio' && d.longTermRatioPercent === null) {
+    ctx.addIssue({ code: 'custom', path: ['longTermRatioPercent'], message: 'Indiquez la part retenue des placements à long terme.' });
+  }
+});
+
+export const ASSET_KINDS = ['cash', 'gold', 'silver', 'jewelry_personal', 'stocks_funds', 'pension', 'group_insurance', 'life_insurance',
+  'business_inventory', 'business_cash', 'receivable', 'real_estate_residence', 'real_estate_investment', 'vehicle', 'other'] as const;
+export const assetSchema = z.object({
+  kind: z.enum(ASSET_KINDS, { message: 'Choisissez le type de bien.' }),
+  name: z.string().trim().min(1, 'Nom du bien requis.').max(120),
+  value: z.string().trim().optional().transform((v) => v ?? ''),
+  weightGrams: z.string().trim().optional().transform((v) => v ?? ''),
+  purityPermille: z.preprocess(emptyToNull, z.coerce.number({ message: 'Titre invalide.' }).int().min(1, 'Titre entre 1 et 1000 ‰.').max(1000, 'Titre entre 1 et 1000 ‰.').nullable()),
+  metal: choice(['gold', 'silver'] as const),
+  heldFor: choice(['trading', 'long_term'] as const),
+  accessible: choice(['yes', 'no'] as const),
+  receivableLikely: choice(['yes', 'no'] as const),
+}).transform((d, ctx) => {
+  const byWeight = d.kind === 'gold' || d.kind === 'silver' || d.kind === 'jewelry_personal';
+  let valueCents = 0;
+  let weightMg: number | null = null;
+  if (byWeight && d.weightGrams) {
+    const mg = Math.round(Number(d.weightGrams.replace(',', '.')) * 1000);
+    if (!Number.isFinite(mg) || mg <= 0 || mg > 100_000_000) { ctx.addIssue({ code: 'custom', path: ['weightGrams'], message: 'Poids invalide (en grammes).' }); return z.NEVER; }
+    weightMg = mg;
+  } else {
+    try { valueCents = amountToCents(d.value); } catch { ctx.addIssue({ code: 'custom', path: ['value'], message: byWeight ? 'Indiquez le poids ou la valeur.' : 'Valeur requise (exemple : 1 234,56).' }); return z.NEVER; }
+    if (valueCents < 0 || valueCents > 100_000_000_00) { ctx.addIssue({ code: 'custom', path: ['value'], message: 'Valeur invalide.' }); return z.NEVER; }
+  }
+  if (d.kind === 'jewelry_personal' && weightMg !== null && !d.metal) { ctx.addIssue({ code: 'custom', path: ['metal'], message: 'Précisez le métal des bijoux.' }); return z.NEVER; }
+  return { ...d, valueCents, weightMg };
+});
+
+export const liabilitySchema = z.object({
+  name: z.string().trim().min(1, 'Nom de la dette requis.').max(120),
+  kind: z.enum(['mortgage', 'consumer_loan', 'family_loan', 'other'], { message: 'Choisissez le type de dette.' }),
+  outstanding: amount('Capital restant dû'),
+  due12m: amount('Échéances des 12 prochains mois'),
+}).refine((d) => d.due12m <= d.outstanding, { path: ['due12m'], message: 'Les échéances à 12 mois ne peuvent pas dépasser le capital restant dû.' });
