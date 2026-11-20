@@ -4,6 +4,14 @@ import { addMonths, monthsBetween, type IsoDate } from './dates.ts';
 
 export type GoalKind = 'hajj' | 'omra' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
 
+/** Projets propres à une personne et protégés (consentement article 9). */
+export const RELIGIOUS_GOAL_KINDS: readonly GoalKind[] = ['hajj', 'omra'];
+export const GENERAL_GOAL_KINDS: readonly GoalKind[] = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal'];
+export const isReligiousGoal = (kind: GoalKind): boolean => RELIGIOUS_GOAL_KINDS.includes(kind);
+
+/** Cycle de vie choisi par l'utilisateur (indépendant du statut calculé du plan). */
+export type GoalLifecycle = 'active' | 'paused' | 'achieved' | 'archived';
+
 export interface Goal {
   id: string;
   kind: GoalKind;
@@ -12,6 +20,12 @@ export interface Goal {
   targetDate: IsoDate;
   /** Capacité d'épargne mensuelle déclarée par l'utilisateur (facultative). */
   monthlyCapacityCents?: number;
+  /** Cycle de vie ; absent = actif. */
+  lifecycle?: GoalLifecycle;
+  /** Date de réalisation déclarée par l'utilisateur (« Réaliser »). */
+  realizedOn?: IsoDate;
+  /** Priorité 1 (la plus haute) à 5. */
+  priority?: number;
 }
 
 export interface GoalAllocation {
@@ -94,3 +108,55 @@ export function observedMonthlyPace(allocations: readonly GoalAllocation[], goal
   const total = inWindow.reduce((s, a) => s + a.amountCents, 0);
   return Math.max(0, Math.floor(total / months));
 }
+
+// ---------------------------------------------------------------------------
+// Parcours d'un projet : Créer → Planifier → Simuler → Suivre → Réaliser
+// ---------------------------------------------------------------------------
+export type JourneyStep = 'create' | 'plan' | 'simulate' | 'follow' | 'realize';
+export const JOURNEY_STEPS: readonly JourneyStep[] = ['create', 'plan', 'simulate', 'follow', 'realize'];
+
+export interface Journey {
+  /** Étape à laquelle se trouve le projet (la prochaine action utile). */
+  current: JourneyStep;
+  done: Record<JourneyStep, boolean>;
+}
+
+/**
+ * Étapes franchies, sans rien supposer :
+ * - planifier = cible, date ET capacité mensuelle connues ;
+ * - simuler = un rythme permet d'estimer une date d'atteinte ;
+ * - suivre = au moins une affectation enregistrée ;
+ * - réaliser = l'utilisateur a déclaré le projet réalisé.
+ */
+export function goalJourney(goal: Goal, plan: GoalPlan, allocationCount: number): Journey {
+  const done: Record<JourneyStep, boolean> = {
+    create: true,
+    plan: goal.monthlyCapacityCents !== undefined,
+    simulate: plan.projectedCompletionDate !== null,
+    follow: allocationCount > 0,
+    realize: goal.lifecycle === 'achieved',
+  };
+  const current = JOURNEY_STEPS.find((s) => !done[s]) ?? 'realize';
+  return { current, done };
+}
+
+/** « Et si j'épargnais X par mois ? » : plan recalculé avec ce rythme, sans rien enregistrer. */
+export function simulateGoalPace(goal: Goal, allocations: readonly GoalAllocation[], asOf: IsoDate, monthlyCents: Cents): GoalPlan {
+  if (!Number.isInteger(monthlyCents) || monthlyCents < 0) throw new RangeError('rythme simulé invalide');
+  return planGoal({ ...goal, monthlyCapacityCents: monthlyCents }, allocations, asOf);
+}
+
+export interface AllocationLine { allocatedOn: IsoDate; amountCents: Cents; balanceCents: Cents }
+
+/** Historique des affectations d'un projet, du plus ancien au plus récent, avec le solde virtuel. */
+export function allocationHistory(allocations: readonly GoalAllocation[], goalId: string): AllocationLine[] {
+  let balance = 0;
+  return allocations
+    .filter((a) => a.goalId === goalId)
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (x.a.allocatedOn < y.a.allocatedOn ? -1 : x.a.allocatedOn > y.a.allocatedOn ? 1 : x.i - y.i))
+    .map(({ a }) => { balance += a.amountCents; return { allocatedOn: a.allocatedOn, amountCents: a.amountCents, balanceCents: balance }; });
+}
+
+/** Le projet participe-t-il encore à la planification (capacité, répartition, recommandations) ? */
+export const isPlannable = (g: Goal): boolean => (g.lifecycle ?? 'active') === 'active';

@@ -89,10 +89,12 @@ export const fr = {
     virtualNotice: `Enveloppe virtuelle : votre argent reste sur vos comptes. ${brand.name} ne déplace aucun fonds.`,
     status: { achieved: 'Atteint', on_track: 'En bonne voie', behind: 'En retard', overdue: 'Échéance dépassée', to_determine: 'Rythme à déterminer' },
     pace: 'Rythme observé sur 3 mois',
+    lifecycle: { active: 'En cours', paused: 'En pause', achieved: 'Réalisé', archived: 'Archivé' },
+    journey: { create: 'Créer', plan: 'Planifier', simulate: 'Simuler', follow: 'Suivre', realize: 'Réaliser' },
     months: '{count} mois',
     kind: {
-      hajj: 'Hajj', omra: 'Omra', children_education: 'Études des enfants', real_estate: 'Immobilier',
-      retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve', personal: 'Projet personnel',
+      hajj: 'Hajj', omra: 'Omra', children_education: 'Études des enfants', real_estate: 'Achat immobilier',
+      retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve d’urgence', personal: 'Projet personnel',
     },
   },
   zakat: {

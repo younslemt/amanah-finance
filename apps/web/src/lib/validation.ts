@@ -90,6 +90,36 @@ export const hajjGoalSchema = z.object({
   monthlyCapacity: amount('Capacité mensuelle'),
 });
 
+// --- Projets universels (Sprint 5) ----------------------------------------------
+export const GOAL_KINDS = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal', 'hajj', 'omra'] as const;
+/** Création : la catégorie est choisie une fois (elle ne change plus) ; nom facultatif (libellé de la catégorie). */
+export const goalSchema = z.object({
+  kind: z.enum(GOAL_KINDS, { message: 'Choisissez une catégorie de projet.' }),
+  name: z.string().trim().max(120, 'Nom trop long (120 caractères au plus).').optional().transform((v) => v || null),
+  target: amount('Montant cible', { min: 1 }),
+  available: z.string().trim().optional().transform((v) => (v ? v : '0')).pipe(amount('Épargne disponible')),
+  targetDate: isoDate('Date souhaitée'),
+  monthlyCapacity: amount('Capacité mensuelle'),
+}).refine((d) => d.available <= d.target, { path: ['available'], message: 'L’épargne disponible dépasse le montant cible.' });
+
+/** Modification : l'historique des affectations n'est jamais touché. */
+export const goalUpdateSchema = z.object({
+  id: z.string().uuid('Projet invalide.'),
+  name: z.string().trim().min(1, 'Nom du projet requis.').max(120),
+  target: amount('Montant cible', { min: 1 }),
+  targetDate: isoDate('Date souhaitée'),
+  monthlyCapacity: amount('Capacité mensuelle'),
+  priority: z.coerce.number({ message: 'Priorité invalide.' }).int().min(1, 'Priorité de 1 à 5.').max(5, 'Priorité de 1 à 5.'),
+});
+
+export const goalLifecycleSchema = z.object({
+  id: z.string().uuid('Projet invalide.'),
+  action: z.enum(['achieve', 'reopen', 'pause', 'resume', 'archive'], { message: 'Action invalide.' }),
+  realizedOn: z.string().optional().transform((v) => v || null).pipe(isoDate('Date de réalisation').nullable()),
+}).refine((d) => d.action !== 'achieve' || d.realizedOn !== null, { path: ['realizedOn'], message: 'Indiquez la date de réalisation.' });
+
+export const simulationSchema = z.object({ monthly: amount('Épargne mensuelle simulée') });
+
 export const allocationSchema = z.object({
   goalId: z.string().uuid('Objectif invalide.'),
   direction: z.enum(['add', 'remove']),

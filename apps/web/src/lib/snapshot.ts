@@ -4,7 +4,7 @@
  */
 import {
   analyzeFinances, recommend, type AnalysisBudget, type AnalysisCategory, type CategoryNature, type FinancialAnalysis, type Recommendation,
-  calculateZakat, computeNetWorth, detectInterest, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
+  calculateZakat, computeNetWorth, detectInterest, isPlannable, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
   type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
   summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
   type PreparedZakat, type PriceEntry, type ZakatChoices, type ZakatResult, prepareZakat,
@@ -119,7 +119,8 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
   });
   const recommendations = recommend({
     analysis, hidden: new Set(data.hiddenRecommendations ?? []),
-    goals: goals.map((g) => ({ ...g, paceCents: observedMonthlyPace(data.allocations, g.goal.id, data.asOf) })),
+    // Projets en pause ou réalisés : hors planification (pas de recommandation de rattrapage)
+    goals: goals.filter((g) => isPlannable(g.goal)).map((g) => ({ ...g, paceCents: observedMonthlyPace(data.allocations, g.goal.id, data.asOf) })),
   });
 
   return {

@@ -11,6 +11,7 @@ const SCREENS = [
   { path: '/budget/optimiser', heading: 'Optimiser mon budget', nav: 'Budget' },
   { path: '/recommandations', heading: 'Mes recommandations', nav: 'Accueil' },
   { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
+  { path: '/goals/goal-hajj', heading: 'Hajj en couple', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
   { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
   { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
@@ -105,6 +106,10 @@ test('les statuts de conformité reflètent les informations disponibles', async
   await page.goto('/goals');
   await expect(page.getByText('Rythme à déterminer').first()).toBeVisible();
   await expect(page.getByText('En retard').first()).toBeVisible();
+  await expect(page.getByTestId('parcours-projet').first()).toBeVisible();
+  await page.goto('/goals/goal-hajj?mensuel=500');
+  await expect(page.getByTestId('resultat-simulation')).toContainText('rien n’est enregistré');
+  await expect(page.getByTestId('historique-affectations')).toContainText('500,00');
 });
 
 test('la connexion est désactivée en démonstration', async ({ page }) => {

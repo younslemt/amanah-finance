@@ -9,7 +9,7 @@ import { getHouseholdData, getSnapshot } from '@/lib/data';
 import { isDemoMode } from '@/lib/env';
 import { categoryLabel } from '@/lib/labels';
 import { formatCents, formatDate, formatMonth } from '@/lib/format';
-import { observedMonthlyPace } from '@amanah/engines';
+import { isPlannable, observedMonthlyPace } from '@amanah/engines';
 import { requireOnboardedSession } from '@/lib/supabase/session';
 
 export const metadata: Metadata = { title: 'Optimiser mon budget' };
@@ -28,7 +28,7 @@ export default async function OptimizePage({ searchParams }: { searchParams: Pro
     slug, label: categoryLabel(slug, data.categories), medianCents: categoryMedian(a, slug),
     nature: (data.natureOverrides?.[slug] ?? data.categories.find((c) => c.slug === slug)?.defaultNature ?? 'variable') as 'fixed' | 'variable',
   })).filter((c) => c.medianCents > 0).sort((x, y) => y.medianCents - x.medianCents);
-  const goals = s.goals.map(({ goal }) => ({
+  const goals = s.goals.filter(({ goal }) => isPlannable(goal)).map(({ goal }) => ({
     goal, allocations: data.allocations.filter((al) => al.goalId === goal.id), observedPaceCents: observedMonthlyPace(data.allocations, goal.id, data.asOf),
   }));
   const { buckets: _omit, ...clientAnalysis } = a;

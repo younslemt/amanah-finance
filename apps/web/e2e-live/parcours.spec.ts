@@ -96,9 +96,10 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await signIn(page, A);
     await page.goto('/goals');
     // Sprint 2 : l'objectif Hajj demande le consentement article 9, distinct de l'accès à l'application
-    await expect(page.getByTestId('form-hajj')).toHaveCount(0);
+    await expect(page.getByTestId('form-objectif').getByRole('option', { name: /^Hajj/ })).toHaveCount(0);
     await activateIslamicFinance(page, '/goals');
-    const form = page.getByTestId('form-hajj');
+    const form = page.getByTestId('form-objectif');
+    await form.getByLabel('Catégorie').selectOption('hajj');
     await form.getByLabel('Montant cible (€)').fill('9 000');
     await form.getByLabel('Épargne déjà disponible (€)').fill('1 500');
     await form.getByLabel('Capacité d’épargne mensuelle (€)').fill('400');

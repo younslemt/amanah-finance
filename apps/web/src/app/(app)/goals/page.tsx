@@ -1,82 +1,84 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Badge, Card, CardTitle, Notice, PageHeader, Progress, Stat } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
 import { Field, SelectField } from '@/components/forms/fields';
-import { getSnapshot } from '@/lib/data';
+import { JourneySteps } from '@/components/finance/journey';
+import { getHouseholdData, getSnapshot } from '@/lib/data';
 import { isDemoMode } from '@/lib/env';
 import { religiousAccess } from '@/lib/supabase/session';
 import { ReligiousGate } from '@/components/religious-gate';
 import { formatCents, formatDate } from '@/lib/format';
-import { interpolate } from '@/lib/i18n';
-import { addMonths } from '@amanah/engines';
+import { addMonths, GENERAL_GOAL_KINDS, goalJourney, isReligiousGoal, RELIGIOUS_GOAL_KINDS } from '@amanah/engines';
 import { fr } from '@/messages/fr';
-import { allocateToGoal, createHajjGoal } from '../actions';
+import { createGoal } from '../actions';
 
 export const metadata: Metadata = { title: fr.goals.title };
 
-const tone = { achieved: 'positive', on_track: 'positive', behind: 'warning', overdue: 'critical', to_determine: 'neutral' } as const;
-const paceLabel = { declared: 'Capacité mensuelle déclarée', observed: 'Rythme observé sur 3 mois', none: 'Rythme' } as const;
+const goalTone = { achieved: 'positive', on_track: 'positive', behind: 'warning', overdue: 'critical', to_determine: 'neutral' } as const;
 
 export default async function GoalsPage() {
   const { enabled: religious } = await religiousAccess();
-  const s = await getSnapshot();
+  const [s, data] = await Promise.all([getSnapshot(), getHouseholdData()]);
   const t = fr.goals;
+  const count = (id: string) => data.allocations.filter((a) => a.goalId === id).length;
+  const kinds = [...GENERAL_GOAL_KINDS, ...(religious || isDemoMode ? RELIGIOUS_GOAL_KINDS : [])];
   return (
     <>
-      <PageHeader title={t.title} />
-      <Notice>{t.virtualNotice}</Notice>
-      {s.goals.length === 0 ? <Card className="mt-4"><p className="text-ink-muted">{fr.common.empty}</p></Card> : null}
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <PageHeader title={t.title} subtitle="Créer, planifier, simuler, suivre, réaliser : vos projets pas à pas." />
+      <Notice>{t.virtualNotice} Affecter un montant à un projet n’est ni une dépense ni un virement.</Notice>
+      {s.goals.length === 0 ? <Card className="mt-4"><p className="text-ink-muted">Aucun projet pour l’instant : créez le premier ci-dessous.</p></Card> : null}
+      <div className="mt-4 grid gap-4 md:grid-cols-2" data-testid="liste-projets">
         {s.goals.map(({ goal, plan }) => (
           <Card key={goal.id} as="article">
-            <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-wide text-accent-600">{t.kind[goal.kind]}</p>
+                <p className="text-xs uppercase tracking-wide text-accent-600">{t.kind[goal.kind]}{isReligiousGoal(goal.kind) ? ' · privé' : ''}</p>
                 <h2 className="text-xl text-primary-900">{goal.name}</h2>
               </div>
-              <Badge tone={tone[plan.status]}>{t.status[plan.status]}</Badge>
+              <Badge tone={goal.lifecycle && goal.lifecycle !== 'active' ? 'neutral' : goalTone[plan.status]}>
+                {goal.lifecycle && goal.lifecycle !== 'active' ? t.lifecycle[goal.lifecycle] : t.status[plan.status]}
+              </Badge>
             </div>
-            <Progress permille={plan.progressPermille} label={goal.name} />
+            <JourneySteps journey={goalJourney(goal, plan, count(goal.id))} compact />
+            <div className="mt-3"><Progress permille={plan.progressPermille} label={goal.name} /></div>
             <p className="mt-1 text-right text-xs text-ink-muted" data-testid="progression">{Math.round(plan.progressPermille / 10)} %</p>
-            <div className="mt-3 grid grid-cols-2 gap-4">
+            <div className="mt-2 grid grid-cols-2 gap-3">
               <Stat label={t.saved} value={formatCents(plan.savedCents)} />
               <Stat label={t.target} value={formatCents(goal.targetCents)} />
-              <Stat label={t.monthly} value={formatCents(plan.monthlyRequiredCents)} />
-              <Stat label={t.deadline} value={formatDate(goal.targetDate)} hint={interpolate(t.months, { count: plan.monthsLeft })} />
-              {goal.monthlyCapacityCents !== undefined ? <Stat label={paceLabel.declared} value={formatCents(goal.monthlyCapacityCents)} /> : null}
+              <Stat label="Date souhaitée" value={formatDate(goal.targetDate)} />
               <Stat label="Atteinte estimée" value={plan.projectedCompletionDate ? formatDate(plan.projectedCompletionDate) : fr.common.toDetermine}
-                hint={plan.paceSource === 'none' ? 'Indiquez une capacité mensuelle' : paceLabel[plan.paceSource]} />
+                hint={plan.paceSource === 'none' ? 'Indiquez une capacité mensuelle' : plan.paceSource === 'declared' ? `Au rythme de ${formatCents(goal.monthlyCapacityCents ?? 0)} / mois` : 'Rythme observé sur 3 mois'} />
             </div>
-            {!isDemoMode ? (
-              <details className="mt-4 rounded-lg border border-line p-3">
-                <summary className="cursor-pointer text-sm font-medium">Affecter ou retirer un montant</summary>
-                <ActionForm action={allocateToGoal} submitLabel="Valider" className="mt-3" testId="form-allocation">
-                  <input type="hidden" name="goalId" value={goal.id} />
-                  <SelectField label="Mouvement" name="direction" defaultValue="add">
-                    <option value="add">Affecter à l’objectif</option>
-                    <option value="remove">Retirer de l’objectif</option>
-                  </SelectField>
-                  <Field label="Montant (€)" name="amount" inputMode="decimal" required />
-                </ActionForm>
-              </details>
-            ) : null}
+            <Link href={`/goals/${goal.id}`} className="mt-4 inline-block rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-primary-800 hover:bg-mist" data-testid="lien-projet">
+              Ouvrir le projet
+            </Link>
           </Card>
         ))}
       </div>
 
-      {!isDemoMode && !religious ? <div className="mt-4"><ReligiousGate feature="Objectif Hajj" next="/goals" /></div> : null}
-      {!isDemoMode && religious ? (
+      {!isDemoMode ? (
         <Card className="mt-4">
-          <CardTitle>Nouvel objectif Hajj</CardTitle>
-          <p className="mb-3 text-xs text-ink-muted">Objectif personnel : privé dans un foyer partagé, sauf si vous choisissez de partager vos données de finance islamique.</p>
-          <ActionForm action={createHajjGoal} submitLabel="Créer l’objectif" testId="form-hajj" className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nom de l’objectif" name="name" defaultValue="Hajj" required maxLength={120} />
-            <Field label="Montant cible (€)" name="target" inputMode="decimal" required hint="Estimation de votre budget total." />
-            <Field label="Épargne déjà disponible (€)" name="available" inputMode="decimal" defaultValue="0" />
+          <CardTitle>Nouveau projet</CardTitle>
+          <p className="mb-3 text-sm text-ink-muted">Étape 1 sur 5 : créer. Vous planifierez, simulerez et suivrez ensuite depuis la fiche du projet.</p>
+          <ActionForm action={createGoal} submitLabel="Créer l’objectif" testId="form-objectif" className="grid gap-3 sm:grid-cols-2">
+            <SelectField label="Catégorie" name="kind" defaultValue="" required>
+              <option value="" disabled>Choisir…</option>
+              {kinds.map((k) => <option key={k} value={k}>{t.kind[k]}{isReligiousGoal(k) ? ' (privé)' : ''}</option>)}
+            </SelectField>
+            <Field label="Nom du projet (facultatif)" name="name" maxLength={120} hint="Par défaut : le nom de la catégorie." />
+            <Field label="Montant cible (€)" name="target" inputMode="decimal" required hint="Estimation du budget total." />
             <Field label="Date souhaitée" name="targetDate" type="date" required defaultValue={addMonths(s.asOf, 24)} />
+            <Field label="Épargne déjà disponible (€)" name="available" inputMode="decimal" defaultValue="0" />
             <Field label="Capacité d’épargne mensuelle (€)" name="monthlyCapacity" inputMode="decimal" required />
           </ActionForm>
         </Card>
+      ) : null}
+
+      {!isDemoMode && !religious ? (
+        <div className="mt-4" data-testid="projets-religieux-fermes">
+          <ReligiousGate feature="Projets Hajj, Omra et Aïd al-Adha" next="/goals" />
+        </div>
       ) : null}
     </>
   );

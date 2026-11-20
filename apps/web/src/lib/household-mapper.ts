@@ -10,7 +10,7 @@ export interface AccountRow { id: string; name: string; type: string; currency: 
 export interface TransactionRow { id: string; account_id: string; booked_on: string; amount_cents: number | string; currency: string; description: string; counterparty_name: string | null; category_slug: string | null; is_interest: boolean; counterparty_iban_last4?: string | null }
 export interface CategoryRow { slug: string; kind: 'income' | 'expense' | 'transfer'; is_essential: boolean; is_interest: boolean; household_id: string | null; label?: string | null; default_nature?: 'fixed' | 'variable' | null }
 export interface BudgetRow { category_slug: string; limit_cents: number | string; month: string }
-export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string; monthly_capacity_cents?: number | string | null }
+export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string; monthly_capacity_cents?: number | string | null; priority?: number | null; realized_on?: string | null }
 export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string }
 export interface AssetRow { id: string; kind: ZakatAsset['kind']; name: string; value_cents: number | string; weight_mg: number | string | null; purity_permille: number | null; is_accessible: boolean; receivable_likely: boolean | null; account_id: string | null; details: Record<string, unknown> | null }
 export interface LiabilityRow { id: string; name: string; outstanding_cents: number | string; due_12m_cents: number | string }
@@ -127,6 +127,9 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
     goals: rows.goals.filter((g) => g.status !== 'archived').map((g) => ({
       id: g.id, kind: g.kind, name: g.name, targetCents: toCents(g.target_cents), targetDate: g.target_date,
       monthlyCapacityCents: g.monthly_capacity_cents === null || g.monthly_capacity_cents === undefined ? undefined : toCents(g.monthly_capacity_cents),
+      lifecycle: (['active', 'paused', 'achieved'] as const).find((x) => x === g.status) ?? 'active',
+      ...(g.realized_on ? { realizedOn: g.realized_on } : {}),
+      ...(g.priority ? { priority: g.priority } : {}),
     })),
     allocations: rows.allocations.map((a) => ({ goalId: a.goal_id, amountCents: toCents(a.amount_cents), allocatedOn: a.allocated_on })) as GoalAllocation[],
     assets: [...accountAssets, ...manualAssets],
