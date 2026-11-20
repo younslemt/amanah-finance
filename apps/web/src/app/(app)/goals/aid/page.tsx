@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { FormStep } from '@/components/ui/form-step';
 import Link from 'next/link';
 import { Card, CardTitle, Notice, PageHeader } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
@@ -43,15 +44,15 @@ export default async function AidPage({ searchParams }: { searchParams: Promise<
         <ActionForm action={createEidGoal} submitLabel={proposal ? 'Créer l’Aïd de l’année suivante' : 'Créer mon projet Aïd'} testId="form-aid" className="space-y-4">
           {prev ? <input type="hidden" name="previousGoalId" value={prev.goal_id} /> : null}
           <input type="hidden" name="civilYear" value={civilYear} />
-          <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="mb-1 text-sm font-semibold text-primary-900">1. Budget (année civile {civilYear})</legend>
+          <FormStep step={1} total={3} title={`Budget (année civile ${civilYear})`}>
+            
             <Field label="Sacrifice ou quote-part (€)" name="sacrifice" inputMode="decimal" defaultValue={b ? centsToInput(b.sacrificeCents) : ''} />
             <Field label="Frais complémentaires (€)" name="extras" inputMode="decimal" defaultValue={b ? centsToInput(b.extraCostsCents) : ''} hint="Transport, découpe, repas…" />
             <Field label="Contribution à un organisme (€)" name="organization" inputMode="decimal" defaultValue={b ? centsToInput(b.organizationCents) : ''} hint="Sacrifice délégué ou don, si vous le prévoyez." />
             <Field label="Contributions familiales annoncées (€)" name="family" inputMode="decimal" defaultValue={b ? centsToInput(b.familyContributionCents) : ''} hint="Montants apportés par d’autres membres de la famille." />
-          </fieldset>
-          <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="mb-1 text-sm font-semibold text-primary-900">2. Date</legend>
+          </FormStep>
+          <FormStep step={2} total={3} title="Date">
+            
             <div>
               <Field label="Date de l’Aïd retenue" name="targetDate" type="date" min={`${civilYear}-01-01`} max={`${civilYear}-12-31`} defaultValue={estimates[0]?.date ?? ''} required />
               <p className="mt-1 text-xs text-ink-muted" data-testid="estimation-aid">
@@ -63,12 +64,12 @@ export default async function AidPage({ searchParams }: { searchParams: Promise<
               { value: 'confirmed', label: 'Oui, confirmée par une source que j’indique' },
             ]} />
             <Field label="Source de la date (si confirmée)" name="dateSource" maxLength={200} hint="Par exemple : annonce de votre mosquée." />
-          </fieldset>
-          <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="mb-1 text-sm font-semibold text-primary-900">3. Épargne</legend>
+          </FormStep>
+          <FormStep step={3} total={3} title="Épargne">
+            
             <Field label="Épargne déjà disponible (€)" name="available" inputMode="decimal" defaultValue="0" hint={proposal ? 'Rien n’est repris de l’année précédente.' : undefined} />
             <Field label="Effort d’épargne mensuel (€)" name="monthlyCapacity" inputMode="decimal" required />
-          </fieldset>
+          </FormStep>
         </ActionForm>
       </Card>
     </>

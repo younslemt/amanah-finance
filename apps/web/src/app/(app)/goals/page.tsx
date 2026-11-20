@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { FormStep } from '@/components/ui/form-step';
 import Link from 'next/link';
 import { Badge, Card, CardTitle, Notice, PageHeader, Progress, Stat } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
@@ -70,15 +71,21 @@ export default async function GoalsPage() {
           <CardTitle>Nouveau projet</CardTitle>
           <p className="mb-3 text-sm text-ink-muted">Étape 1 sur 5 : créer. Vous planifierez, simulerez et suivrez ensuite depuis la fiche du projet.</p>
           <ActionForm action={createGoal} submitLabel="Créer l’objectif" testId="form-objectif" className="grid gap-3 sm:grid-cols-2">
-            <SelectField label="Catégorie" name="kind" defaultValue="" required>
-              <option value="" disabled>Choisir…</option>
-              {kinds.map((k) => <option key={k} value={k}>{t.kind[k]}{isReligiousGoal(k) ? ' (privé)' : ''}</option>)}
-            </SelectField>
-            <Field label="Nom du projet (facultatif)" name="name" maxLength={120} hint="Par défaut : le nom de la catégorie." />
-            <Field label="Montant cible (€)" name="target" inputMode="decimal" required hint="Estimation du budget total." />
-            <Field label="Date souhaitée" name="targetDate" type="date" required defaultValue={addMonths(s.asOf, 24)} />
-            <Field label="Épargne déjà disponible (€)" name="available" inputMode="decimal" defaultValue="0" />
-            <Field label="Capacité d’épargne mensuelle (€)" name="monthlyCapacity" inputMode="decimal" required />
+            <FormStep step={1} total={3} title="Le projet">
+              <SelectField label="Catégorie" name="kind" defaultValue="" required>
+                <option value="" disabled>Choisir…</option>
+                {kinds.map((k) => <option key={k} value={k}>{t.kind[k]}{isReligiousGoal(k) ? ' (privé)' : ''}</option>)}
+              </SelectField>
+              <Field label="Nom du projet (facultatif)" name="name" maxLength={120} hint="Par défaut : le nom de la catégorie." />
+            </FormStep>
+            <FormStep step={2} total={3} title="Montant et échéance">
+              <Field label="Montant cible (€)" name="target" inputMode="decimal" required hint="Estimation du budget total." />
+              <Field label="Date souhaitée" name="targetDate" type="date" required defaultValue={addMonths(s.asOf, 24)} />
+            </FormStep>
+            <FormStep step={3} total={3} title="Épargne">
+              <Field label="Épargne déjà disponible (€)" name="available" inputMode="decimal" defaultValue="0" />
+              <Field label="Capacité d’épargne mensuelle (€)" name="monthlyCapacity" inputMode="decimal" required />
+            </FormStep>
           </ActionForm>
         </Card>
       ) : null}
