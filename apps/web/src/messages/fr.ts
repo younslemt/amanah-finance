@@ -93,7 +93,7 @@ export const fr = {
     journey: { create: 'Créer', plan: 'Planifier', simulate: 'Simuler', follow: 'Suivre', realize: 'Réaliser' },
     months: '{count} mois',
     kind: {
-      hajj: 'Hajj', omra: 'Omra', children_education: 'Études des enfants', real_estate: 'Achat immobilier',
+      hajj: 'Hajj', omra: 'Omra', eid_al_adha: 'Aïd al-Adha', children_education: 'Études des enfants', real_estate: 'Achat immobilier',
       retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve d’urgence', personal: 'Projet personnel',
     },
   },

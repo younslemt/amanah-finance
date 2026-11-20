@@ -118,6 +118,42 @@ export const goalLifecycleSchema = z.object({
   realizedOn: z.string().optional().transform((v) => v || null).pipe(isoDate('Date de réalisation').nullable()),
 }).refine((d) => d.action !== 'achieve' || d.realizedOn !== null, { path: ['realizedOn'], message: 'Indiquez la date de réalisation.' });
 
+// --- Aïd al-Adha (Sprint 5, lot 5.2) ---------------------------------------------
+const optionalAmountZero = (label: string) => z.string().trim().optional().transform((v) => (v ? v : '0')).pipe(amount(label));
+const eidBudgetFields = {
+  sacrifice: optionalAmountZero('Sacrifice ou quote-part'),
+  extras: optionalAmountZero('Frais complémentaires'),
+  organization: optionalAmountZero('Contribution à un organisme'),
+  family: optionalAmountZero('Contributions familiales'),
+};
+const eidDateFields = {
+  targetDate: isoDate('Date de l’Aïd'),
+  dateStatus: z.enum(['entered', 'confirmed'], { message: 'Indiquez si la date est confirmée.' }),
+  dateSource: z.string().trim().max(200, 'Source trop longue.').optional().transform((v) => v || null),
+};
+const budgetOk = (d: { sacrifice: number; extras: number; organization: number; family: number }) => d.sacrifice + d.extras + d.organization > d.family;
+const sourceOk = (d: { dateStatus: string; dateSource: string | null }) => d.dateStatus !== 'confirmed' || (d.dateSource !== null && d.dateSource.length >= 3);
+
+export const eidSchema = z.object({
+  name: z.string().trim().max(120).optional().transform((v) => v || null),
+  civilYear: z.coerce.number({ message: 'Année civile invalide.' }).int().min(2000, 'Année civile invalide.').max(2100, 'Année civile invalide.'),
+  ...eidBudgetFields,
+  ...eidDateFields,
+  available: optionalAmountZero('Épargne disponible'),
+  monthlyCapacity: amount('Effort d’épargne mensuel'),
+  previousGoalId: z.string().optional().transform((v) => v || null).pipe(z.string().uuid('Aïd précédent invalide.').nullable()),
+})
+  .refine(budgetOk, { path: ['family'], message: 'Les contributions familiales couvrent tout le budget : rien à mettre de côté.' })
+  .refine(sourceOk, { path: ['dateSource'], message: 'Une date confirmée doit indiquer sa source (mosquée, autorité suivie…).' })
+  .refine((d) => d.available <= d.sacrifice + d.extras + d.organization - d.family, { path: ['available'], message: 'L’épargne disponible dépasse le montant à mettre de côté.' })
+  .refine((d) => d.targetDate.startsWith(`${d.civilYear}-`), { path: ['targetDate'], message: 'La date doit tomber dans l’année civile choisie.' });
+
+export const eidDateSchema = z.object({ goalId: z.string().uuid('Projet invalide.'), ...eidDateFields })
+  .refine(sourceOk, { path: ['dateSource'], message: 'Une date confirmée doit indiquer sa source (mosquée, autorité suivie…).' });
+
+export const eidBudgetSchema = z.object({ goalId: z.string().uuid('Projet invalide.'), ...eidBudgetFields })
+  .refine(budgetOk, { path: ['family'], message: 'Les contributions familiales couvrent tout le budget : rien à mettre de côté.' });
+
 export const simulationSchema = z.object({ monthly: amount('Épargne mensuelle simulée') });
 
 export const allocationSchema = z.object({

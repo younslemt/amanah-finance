@@ -4,6 +4,7 @@ import {
   DEMO_PRICES, DEMO_TRANSACTIONS,
 } from '@amanah/banking';
 import { accountsToAssets, type HouseholdData } from './snapshot.ts';
+import { DEMO_AID_ALLOCATIONS, DEMO_AID_GOAL } from './demo-eid.ts';
 
 /** Miroir des catégories système de la migration 0005 (utilisé en mode démo). */
 export const SYSTEM_CATEGORIES: AnalysisCategory[] = [
@@ -77,8 +78,8 @@ export function getDemoHousehold(): HouseholdData {
       { month: '2026-08', categorySlug: 'energie', limitCents: 15_000 },
       { month: '2026-08', categorySlug: 'transport', limitCents: 5_000 },
     ],
-    goals: DEMO_GOALS,
-    allocations: DEMO_ALLOCATIONS,
+    goals: [...DEMO_GOALS, DEMO_AID_GOAL],
+    allocations: [...DEMO_ALLOCATIONS, ...DEMO_AID_ALLOCATIONS],
     assets: [...accountsToAssets(accounts), ...DEMO_ASSETS],
     liabilities: DEMO_LIABILITIES,
     prices: DEMO_PRICES,

@@ -12,6 +12,7 @@ const SCREENS = [
   { path: '/recommandations', heading: 'Mes recommandations', nav: 'Accueil' },
   { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
   { path: '/goals/goal-hajj', heading: 'Hajj en couple', nav: 'Projets' },
+  { path: '/goals/goal-aid', heading: 'Aïd al-Adha 2027', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
   { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
   { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
@@ -110,6 +111,11 @@ test('les statuts de conformité reflètent les informations disponibles', async
   await page.goto('/goals/goal-hajj?mensuel=500');
   await expect(page.getByTestId('resultat-simulation')).toContainText('rien n’est enregistré');
   await expect(page.getByTestId('historique-affectations')).toContainText('500,00');
+  await page.goto('/goals/goal-aid');
+  await expect(page.getByTestId('budget-aid')).toContainText('330,00');
+  await expect(page.getByTestId('date-aid')).toContainText('Saisie, non confirmée');
+  await expect(page.getByTestId('date-aid')).toContainText('non officielle');
+  await expect(page.getByTestId('reconduction-aid')).toContainText('Disponible après la réalisation');
 });
 
 test('la connexion est désactivée en démonstration', async ({ page }) => {

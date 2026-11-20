@@ -22,7 +22,7 @@ export default async function GoalsPage() {
   const [s, data] = await Promise.all([getSnapshot(), getHouseholdData()]);
   const t = fr.goals;
   const count = (id: string) => data.allocations.filter((a) => a.goalId === id).length;
-  const kinds = [...GENERAL_GOAL_KINDS, ...(religious || isDemoMode ? RELIGIOUS_GOAL_KINDS : [])];
+  const kinds = [...GENERAL_GOAL_KINDS, ...(religious || isDemoMode ? RELIGIOUS_GOAL_KINDS.filter((k) => k !== 'eid_al_adha') : [])];
   return (
     <>
       <PageHeader title={t.title} subtitle="Créer, planifier, simuler, suivre, réaliser : vos projets pas à pas." />
@@ -56,6 +56,14 @@ export default async function GoalsPage() {
           </Card>
         ))}
       </div>
+
+      {religious && !isDemoMode ? (
+        <Card className="mt-4">
+          <CardTitle>Préparer mon Aïd</CardTitle>
+          <p className="mb-3 text-sm text-ink-muted">Sacrifice ou quote-part, frais, contributions familiales, date : un projet par année civile, reconductible chaque année.</p>
+          <Link href="/goals/aid" className="inline-block rounded-lg bg-primary-800 px-4 py-2.5 text-sm font-medium text-ivory hover:bg-primary-700" data-testid="lien-preparer-aid">Préparer mon Aïd</Link>
+        </Card>
+      ) : null}
 
       {!isDemoMode ? (
         <Card className="mt-4">

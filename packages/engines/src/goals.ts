@@ -2,10 +2,10 @@ import type { Cents } from './money.ts';
 import { divRoundHalfEven } from './money.ts';
 import { addMonths, monthsBetween, type IsoDate } from './dates.ts';
 
-export type GoalKind = 'hajj' | 'omra' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
+export type GoalKind = 'hajj' | 'omra' | 'eid_al_adha' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
 
 /** Projets propres à une personne et protégés (consentement article 9). */
-export const RELIGIOUS_GOAL_KINDS: readonly GoalKind[] = ['hajj', 'omra'];
+export const RELIGIOUS_GOAL_KINDS: readonly GoalKind[] = ['hajj', 'omra', 'eid_al_adha'];
 export const GENERAL_GOAL_KINDS: readonly GoalKind[] = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal'];
 export const isReligiousGoal = (kind: GoalKind): boolean => RELIGIOUS_GOAL_KINDS.includes(kind);
 
