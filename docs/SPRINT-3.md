@@ -113,6 +113,31 @@ Parcours `/budget/optimiser` : **Analyser → Identifier → Simuler → Décide
 | `recommendation_feedback` | Personnelle (`user_id = auth.uid()`), effacée avec le compte |
 | `apply_budget_lines()` | Transaction unique, catégories de dépense visibles, montants ≥ 0, mois valide, scénario du même foyer |
 
+## Corrections de revue (finalisation du Sprint 3)
+
+### 1. Virements internes fiabilisés
+- `matchInternalTransfers()` remplace la détection binaire. Candidats : montants opposés égaux, même devise, deux comptes différents du foyer, 3 jours au plus, opérations de catégorie neutre (`divers` / `autres_revenus`), non catégorisées ou de transfert. Une catégorie reconnue (salaire, loyer, alimentation…) ou des intérêts excluent l'opération.
+- Score de preuve : catégorie de transfert +2, IBAN de la contrepartie = compte du foyer +2, libellé de virement interne +1 par côté, même jour +1.
+- Statuts : **confirmé** (score ≥ 2 et appariement univoque, ou confirmation de l'utilisateur) → neutralisé ; **incertain** (preuve insuffisante ou plusieurs appariements possibles) → les deux opérations restent comptées normalement et la paire apparaît dans « Virements à confirmer » (page Budget). Un rejet de l'utilisateur écarte la paire.
+- `detectInternalTransfers()` ne renvoie plus que les paires confirmées.
+- Migration `20261120000015_transfer_decisions.sql` : décisions de l'utilisateur, RLS par foyer, clés étrangères composites vers les opérations du même foyer.
+- Tests : vrais virements (libellé, IBAN, catégorie), opérations similaires qui n'en sont pas (paiement + remboursement, catégories reconnues, intérêts), cas ambigus, décisions confirmées/rejetées.
+
+### 2. Simulation sans double allocation
+- `simulateScenario()` distingue désormais :
+  - la **capacité** : estimée, déjà engagée (rythmes des objectifs), réellement disponible avant / après scénario ;
+  - l'**allocation globale** : `allocateShortfalls()` répartit la capacité disponible entre les objectifs (en retard, puis à la traîne, puis par échéance) ; la somme allouée ne dépasse jamais la capacité, l'économie potentielle n'est donc comptée qu'une fois ;
+  - les **simulations individuelles** : « si toute l'économie allait à cet objectif », marquées exclusives et non cumulables (affichées repliées).
+- Tests : somme des gains alloués ≤ économie potentielle, allocation + non alloué = disponible, capacité engagée supérieure à l'estimation.
+
+### 3. Couverture des données
+- Une période n'est plus supposée complète parce que les opérations couvrent plusieurs mois. `assessCoverage()` vérifie chaque compte courant ou carte : mois manquant dans sa période, relevé arrêté plus de 10 jours avant la fin du mois, compte sans opérations ensuite. Ces mois sont marqués incomplets et exclus des calculs (capacité, variations, concentration). Un compte sans opération ou commençant plus tard est signalé.
+- Statut : complet / partiel / insuffisant (moins de 3 mois complets), affiché sur le tableau de bord, la page Budget et « Optimiser » ; les mois incomplets sont grisés dans les graphiques.
+
+### 4. CI
+- La CLI Supabase est figée en **3.2.0** (les deux occurrences de `version: latest`), version vérifiée par l'étape `supabase --version` lors de la CI précédente. Cela supprime aussi les échecs « rate limit exceeded » de la résolution de `latest`.
+- Le test de bout en bout « virement incertain » attend la fin de l'import avant de quitter la page.
+
 ## Validation
 
 | Niveau | Contenu |

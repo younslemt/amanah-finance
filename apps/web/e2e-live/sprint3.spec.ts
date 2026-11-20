@@ -114,6 +114,7 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await page.getByLabel('Relevé CSV').setInputFiles(savingsStatement());
     await page.getByRole('button', { name: 'Prévisualiser' }).click();
     await page.getByTestId('form-confirmer-import').getByRole('button', { name: /Importer 1 opération/ }).click();
+    await expect(page.getByTestId('resultat-import')).toContainText('1 opération(s) importée(s)');
     await page.goto('/budget');
     const pending = page.getByTestId('virements-a-confirmer');
     await expect(pending).toContainText(euros('75,00 €'));

@@ -150,7 +150,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 3.2.0 }
       - name: Version de la CLI Supabase
         run: supabase --version
       - name: Démarrer Postgres Supabase et appliquer les migrations
@@ -183,7 +183,7 @@ jobs:
       - name: Installation des dépendances
         run: pnpm install --frozen-lockfile
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 3.2.0 }
       - name: Version de la CLI Supabase
         run: supabase --version
       - name: Démarrer Supabase local (Auth, base, boîte mail de test)
