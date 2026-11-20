@@ -21,6 +21,7 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await completeOnboarding(page, K.name);
     await page.goto('/goals');
     const form = page.getByTestId('form-objectif');
+    await expect(form.getByTestId('etape-formulaire')).toHaveCount(3);
     await expect(form.getByRole('option', { name: /^(Hajj|Omra)/ })).toHaveCount(0);
     await expect(page.getByTestId('projets-religieux-fermes')).toBeVisible();
     await form.getByLabel('Catégorie').selectOption('children_education');
@@ -137,6 +138,8 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await signIn(page, K);
     await page.goto('/goals');
     await page.getByRole('article').filter({ hasText: 'Aïd al-Adha' }).getByTestId('lien-projet').click();
+    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}$/); // navigation terminée avant de lire l'adresse
+    await expect(page.getByTestId('budget-aid')).toBeVisible();
     const url = page.url();
     await page.getByTestId('form-allocation').getByLabel('Montant (€)').fill('120');
     await page.getByTestId('form-allocation').getByRole('button', { name: 'Valider' }).click();
