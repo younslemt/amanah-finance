@@ -1,5 +1,5 @@
 'use client';
-import { useActionState, type ReactNode } from 'react';
+import { startTransition, useActionState, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { initialFormState, type FormState } from '@/lib/form-state';
 import { cn } from '@/components/ui';
 
@@ -18,6 +18,15 @@ export function ActionForm({
   variant?: 'primary' | 'danger' | 'quiet';
 }) {
   const [state, formAction, pending] = useActionState(action, initialFormState);
+  const formRef = useRef<HTMLFormElement>(null);
+  // React 19 vide le formulaire après chaque envoi : en cas d'erreur, la saisie est conservée
+  // (envoi par onSubmit) ; elle n'est effacée qu'après un enregistrement réussi.
+  useEffect(() => { if (state.status === 'ok') formRef.current?.reset(); }, [state]);
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => formAction(fd));
+  };
   const errors = state.fieldErrors ? Object.values(state.fieldErrors) : [];
   const buttonClass = {
     primary: 'bg-primary-800 text-ivory hover:bg-primary-700',
@@ -25,7 +34,7 @@ export function ActionForm({
     quiet: 'border border-line bg-paper text-ink hover:bg-mist',
   }[variant];
   return (
-    <form action={formAction} className={cn('space-y-3', className)} data-testid={testId} noValidate>
+    <form ref={formRef} action={formAction} onSubmit={onSubmit} className={cn('space-y-3', className)} data-testid={testId} noValidate>
       {state.status === 'error' ? (
         <div role="alert" className="rounded-lg border border-[#f0d3cd] bg-[#fbeeeb] p-3 text-sm text-critical">
           {state.message ? <p className="font-medium">{state.message}</p> : null}
