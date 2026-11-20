@@ -9,3 +9,6 @@ export * from './csv.ts';
 export * from './wealth.ts';
 export * from './zakat/engine.ts';
 export { ZAKAT_RULESET, ENGINE_VERSION, type ReferenceId } from './zakat/ruleset.ts';
+export * from './analysis.ts';
+export * from './optimization.ts';
+export * from './recommendations.ts';
