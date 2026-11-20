@@ -51,7 +51,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on').eq('household_id', hid),
     supabase.from('assets').select('id, kind, name, value_cents, weight_mg, purity_permille, is_accessible, receivable_likely, account_id, details').eq('household_id', hid),
     supabase.from('liabilities').select('id, name, outstanding_cents, due_12m_cents').eq('household_id', hid),
-    supabase.from('market_prices').select('symbol, price_per_g_cents, as_of').eq('currency', 'EUR').order('as_of', { ascending: false }).limit(20),
+    supabase.from('market_prices').select('symbol, price_per_g_cents, as_of, source').eq('currency', 'EUR').order('as_of', { ascending: false }).limit(20),
     // Réglages Zakat : ceux de la personne connectée (migration 0011), visibles seulement avec le consentement article 9
     supabase.from('zakat_settings').select('nisab_basis, year_basis, hawl_date, options').eq('household_id', hid).eq('owner_id', auth.user.id).maybeSingle(),
     supabase.from('purification_items').select('id, credited_cents, amount_to_purify_cents, status').eq('household_id', hid).limit(2000),
@@ -60,6 +60,9 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('recurring_feedback').select('series_key').eq('household_id', hid),
     supabase.from('recommendation_feedback').select('fingerprint, status, snooze_until').eq('household_id', hid).eq('user_id', auth.user.id),
     supabase.from('transfer_decisions').select('debit_id, credit_id, verdict').eq('household_id', hid),
+    // Sprint 4 : prix des métaux saisis par la personne (article 9 : vides sans consentement)
+    supabase.from('zakat_metal_prices').select('symbol, price_per_g_cents, as_of, source').eq('household_id', hid).eq('owner_id', auth.user.id)
+      .order('as_of', { ascending: false }).limit(40),
   ]);
   const failed = q.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -75,7 +78,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     allocations: (q[5].data ?? []) as HouseholdRows['allocations'],
     assets: (q[6].data ?? []) as HouseholdRows['assets'],
     liabilities: (q[7].data ?? []) as HouseholdRows['liabilities'],
-    prices: (q[8].data ?? []) as HouseholdRows['prices'],
+    prices: [...((q[15].data ?? []) as HouseholdRows['prices']), ...((q[8].data ?? []) as HouseholdRows['prices'])],
     zakatSettings: (q[9].data ?? null) as HouseholdRows['zakatSettings'],
     accountBalances: balances,
   });

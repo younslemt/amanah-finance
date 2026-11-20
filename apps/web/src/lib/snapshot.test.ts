@@ -27,7 +27,7 @@ describe('vue d’ensemble du foyer de démonstration', () => {
   });
 
   it('ne compte pas deux fois les soldes de comptes', () => {
-    const accountLines = snap.zakat.lines.filter((l) => l.kind === 'bank_balance');
+    const accountLines = snap.zakat.result!.lines.filter((l) => l.kind === 'bank_balance');
     expect(accountLines.map((l) => l.sourceId)).toEqual(['account:demo-current', 'account:demo-savings']);
     // Patrimoine : comptes + espèces + or + bijoux + pension − dette
     expect(snap.wealth.status).toBe('complete');
@@ -35,8 +35,8 @@ describe('vue d’ensemble du foyer de démonstration', () => {
   });
 
   it('produit une Zakat explicable et des intérêts détectés', () => {
-    expect(snap.zakat.status).toBe('due');
-    expect(snap.zakat.lines.length).toBe(7);
+    expect(snap.zakat.result!.status).toBe('due');
+    expect(snap.zakat.result!.lines.length).toBe(7);
     expect(snap.purification.detectedCreditedCents).toBe(2_457);
   });
 
@@ -49,14 +49,15 @@ describe('foyer vide (nouvel utilisateur)', () => {
   const empty: HouseholdData = {
     asOf: '2026-11-09', accounts: [], transactions: [], categories: [], budget: [], goals: [], allocations: [],
     assets: [], liabilities: [], prices: { gold: null, silver: null },
-    zakat: { options: { nisabBasis: null, yearBasis: 'lunar', personalJewelry: 'exclude', longTermInvestments: { mode: 'full_market_value' }, lockedPensions: 'exclude', debts: 'due_12_months' } },
+    zakat: { choices: {} },
     emergencyFundMonths: 3,
   };
   const snap = buildSnapshot(empty);
   it('s’affiche sans erreur et ne conclut rien', () => {
     expect(snap.isEmpty).toBe(true);
-    expect(snap.zakat.status).toBe('to_determine');
-    expect(snap.zakat.dueCents).toBe(0);
+    // Aucun choix : le calcul n'est pas lancé, l'année (seul choix utile sans bien) est demandée
+    expect(snap.zakat.result).toBeNull();
+    expect(snap.zakat.prepared.missing).toEqual(['yearBasis']);
     expect(snap.wealth.netWorthCents).toBe(0);
     expect(snap.goals).toEqual([]);
   });

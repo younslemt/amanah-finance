@@ -166,9 +166,9 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-4 sm:grid-cols-2" data-testid="dashboard-finance-islamique">
         <Card>
           <CardTitle action={<SeeAll href="/zakat" />}>{t.zakat}</CardTitle>
-          <div className="mb-2"><Badge tone={zakatTone[s.zakat.status]}>{fr.zakat.status[s.zakat.status]}</Badge></div>
-          <Stat label={s.zakat.status === 'due' ? fr.zakat.estimated : fr.zakat.indicative}
-            value={s.zakat.status === 'to_determine' ? fr.common.toDetermine : formatCents(s.zakat.status === 'due' ? s.zakat.dueCents : 0)} />
+          <div className="mb-2"><Badge tone={zakatTone[s.zakat.result?.status ?? 'to_determine']}>{s.zakat.result ? fr.zakat.status[s.zakat.result.status] : 'Réglages à compléter'}</Badge></div>
+          <Stat label={s.zakat.result?.status === 'due' ? fr.zakat.estimated : fr.zakat.indicative}
+            value={!s.zakat.result || s.zakat.result.status === 'to_determine' ? fr.common.toDetermine : formatCents(s.zakat.result.status === 'due' ? s.zakat.result.dueCents : 0)} />
         </Card>
         <Card>
           <CardTitle action={<SeeAll href="/purification" />}>{t.purification}</CardTitle>

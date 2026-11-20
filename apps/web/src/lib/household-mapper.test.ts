@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountBalances, mapHouseholdRows, toCents, zakatOptionsFrom, type HouseholdRows } from './household-mapper.ts';
+import { accountBalances, mapHouseholdRows, toCents, zakatChoicesFrom, type HouseholdRows } from './household-mapper.ts';
 import { buildSnapshot } from './snapshot.ts';
 
 // Lignes FICTIVES, au format renvoyé par Supabase (bigint parfois en chaîne)
@@ -29,7 +29,7 @@ const rows: HouseholdRows = {
   liabilities: [{ id: 'l1', name: 'Prêt', outstanding_cents: '50000', due_12m_cents: 20000 }],
   prices: [
     { symbol: 'XAG', price_per_g_cents: 120, as_of: '2026-10-01' },
-    { symbol: 'XAG', price_per_g_cents: 130, as_of: '2026-11-06' },
+    { symbol: 'XAG', price_per_g_cents: 130, as_of: '2026-11-06', source: 'Cotation fictive' },
   ],
   zakatSettings: null,
 };
@@ -56,18 +56,25 @@ describe('conversion des lignes Supabase', () => {
     expect(data.budget).toEqual([{ categorySlug: 'logement', limitCents: 80_000 }]);
   });
   it('retient le prix le plus récent et laisse un prix absent à null', () => {
-    expect(data.prices.silver).toEqual({ pricePerGramCents: 130, asOf: '2026-11-06' });
+    expect(data.prices.silver).toEqual({ pricePerGramCents: 130, asOf: '2026-11-06', source: 'Cotation fictive', status: 'ok' });
+    expect(data.priceEntries!.find((p) => p.asOf === '2026-10-01')!.source).toBe('Source non précisée');
     expect(data.prices.gold).toBe(null);
   });
-  it('sans réglages Zakat, ne choisit pas la base du nisab', () => {
-    expect(data.zakat.options.nisabBasis).toBe(null);
-    expect(buildSnapshot(data).zakat.status).toBe('to_determine');
+  it('sans réglages Zakat, ne choisit rien à la place de la personne', () => {
+    expect(data.zakat.choices.nisabBasis).toBe(null);
+    expect(data.zakat.choices.yearBasis).toBe(null);
+    const snap = buildSnapshot(data);
+    expect(snap.zakat.result).toBeNull();
+    expect(snap.zakat.prepared.missing).toEqual(['yearBasis', 'personalJewelry', 'debts']);
   });
-  it('n’accepte que des options Zakat connues', () => {
-    const z = zakatOptionsFrom({ nisab_basis: 'silver', year_basis: 'lunar', hawl_date: '2025-11-01', options: { debts: 'everything', long_term_investments: 'custom_ratio', long_term_ratio: 7 } });
-    expect(z.options.debts).toBe('due_12_months');
-    expect(z.options.longTermInvestments).toEqual({ mode: 'full_market_value' });
+  it('n’accepte que des options Zakat connues, sans valeur de repli', () => {
+    const z = zakatChoicesFrom({ nisab_basis: 'silver', year_basis: 'lunar', hawl_date: '2025-11-01', options: { debts: 'everything', long_term_investments: 'custom_ratio', long_term_ratio: 7, excluded_source_ids: ['as2', 3] } });
+    expect(z.debts).toBeNull();
+    expect(z.longTermInvestments).toBe('custom_ratio');
+    expect(z.longTermRatioPer100k).toBeNull();
     expect(z.hawlStart).toBe('2025-11-01');
+    expect(z.excludedSourceIds).toEqual(['as2']);
+    expect(zakatChoicesFrom({ nisab_basis: null, year_basis: null, hawl_date: null, options: { long_term_ratio: 0.3 } }).longTermRatioPer100k).toBe(30_000);
   });
 });
 

@@ -2,9 +2,7 @@
  * Conversion des lignes Supabase (schéma des migrations 0001 à 0007) vers les
  * structures des moteurs. Fonctions pures : testées sans base ni réseau.
  */
-import type {
-  AnalysisCategory, Goal, GoalAllocation, MetalPrice, Transaction, ZakatAsset, ZakatLiability, ZakatOptions,
-} from '@amanah/engines';
+import { selectMetalPrice, type AnalysisCategory, type Goal, type GoalAllocation, type PriceEntry, type Transaction, type ZakatAsset, type ZakatChoices, type ZakatLiability } from '@amanah/engines';
 import type { HouseholdAccount, HouseholdData } from './snapshot.ts';
 
 // --- Lignes de la base (sous-ensemble des colonnes lues) ----------------------
@@ -16,8 +14,8 @@ export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_
 export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string }
 export interface AssetRow { id: string; kind: ZakatAsset['kind']; name: string; value_cents: number | string; weight_mg: number | string | null; purity_permille: number | null; is_accessible: boolean; receivable_likely: boolean | null; account_id: string | null; details: Record<string, unknown> | null }
 export interface LiabilityRow { id: string; name: string; outstanding_cents: number | string; due_12m_cents: number | string }
-export interface PriceRow { symbol: 'XAU' | 'XAG'; price_per_g_cents: number | string; as_of: string }
-export interface ZakatSettingsRow { nisab_basis: 'gold' | 'silver' | null; year_basis: 'lunar' | 'solar'; hawl_date: string | null; options: Record<string, unknown> | null }
+export interface PriceRow { symbol: 'XAU' | 'XAG'; price_per_g_cents: number | string; as_of: string; source?: string | null }
+export interface ZakatSettingsRow { nisab_basis: 'gold' | 'silver' | null; year_basis: 'lunar' | 'solar' | null; hawl_date: string | null; options: Record<string, unknown> | null }
 
 export interface HouseholdRows {
   asOf: string;
@@ -56,27 +54,31 @@ export function accountBalances(accounts: AccountRow[], txs: Array<Pick<Transact
   }));
 }
 
-/** Préférences Zakat : seules des valeurs connues sont acceptées, sinon le moteur reste « à déterminer ». */
-export function zakatOptionsFrom(row: ZakatSettingsRow | null): { options: ZakatOptions; hawlStart?: string } {
+/**
+ * Choix Zakat de la personne. Aucune valeur n'est supposée : une option absente ou
+ * inconnue reste « non choisie » (null) et le calcul la demande si elle compte.
+ */
+export function zakatChoicesFrom(row: ZakatSettingsRow | null): ZakatChoices {
   const o = (row?.options ?? {}) as Record<string, unknown>;
-  const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
-  const ratio = typeof o.long_term_ratio === 'number' && o.long_term_ratio >= 0 && o.long_term_ratio <= 1 ? o.long_term_ratio : null;
+  const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | null => (allowed.includes(v as T) ? (v as T) : null);
+  const per100k = typeof o.long_term_ratio_per100k === 'number' && Number.isInteger(o.long_term_ratio_per100k) && o.long_term_ratio_per100k >= 0 && o.long_term_ratio_per100k <= 100_000
+    ? o.long_term_ratio_per100k
+    : typeof o.long_term_ratio === 'number' && o.long_term_ratio >= 0 && o.long_term_ratio <= 1 ? Math.round(o.long_term_ratio * 100_000) : null;
   return {
-    hawlStart: row?.hawl_date ?? undefined,
-    options: {
-      nisabBasis: row?.nisab_basis ?? null,
-      yearBasis: row?.year_basis ?? 'lunar',
-      personalJewelry: pick(o.personal_jewelry, ['include', 'exclude'] as const, 'exclude'),
-      longTermInvestments: o.long_term_investments === 'custom_ratio' && ratio !== null ? { mode: 'custom_ratio', ratio } : { mode: 'full_market_value' },
-      lockedPensions: pick(o.locked_pensions, ['exclude', 'include'] as const, 'exclude'),
-      debts: pick(o.debts, ['due_12_months', 'none', 'all'] as const, 'due_12_months'),
-    },
+    nisabBasis: row?.nisab_basis ?? null,
+    yearBasis: row?.year_basis ?? null,
+    hawlStart: row?.hawl_date ?? null,
+    personalJewelry: pick(o.personal_jewelry, ['include', 'exclude'] as const),
+    longTermInvestments: pick(o.long_term_investments, ['full_market_value', 'custom_ratio'] as const),
+    longTermRatioPer100k: per100k,
+    lockedPensions: pick(o.locked_pensions, ['exclude', 'include'] as const),
+    debts: pick(o.debts, ['due_12_months', 'none', 'all'] as const),
+    excludedSourceIds: Array.isArray(o.excluded_source_ids) ? o.excluded_source_ids.filter((x): x is string => typeof x === 'string').slice(0, 500) : [],
   };
 }
 
-function latestPrice(rows: PriceRow[], symbol: 'XAU' | 'XAG'): MetalPrice | null {
-  const r = rows.filter((p) => p.symbol === symbol).sort((a, b) => (a.as_of < b.as_of ? 1 : -1))[0];
-  return r ? { pricePerGramCents: toCents(r.price_per_g_cents), asOf: r.as_of } : null;
+export function priceEntriesFrom(rows: readonly PriceRow[]): PriceEntry[] {
+  return rows.map((r) => ({ symbol: r.symbol, pricePerGramCents: toCents(r.price_per_g_cents), asOf: r.as_of, source: r.source?.trim() || 'Source non précisée' }));
 }
 
 export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
@@ -114,7 +116,7 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
       };
     });
 
-  const zakat = zakatOptionsFrom(rows.zakatSettings);
+  const priceEntries = priceEntriesFrom(rows.prices);
   return {
     asOf: rows.asOf,
     accounts,
@@ -129,8 +131,9 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
     allocations: rows.allocations.map((a) => ({ goalId: a.goal_id, amountCents: toCents(a.amount_cents), allocatedOn: a.allocated_on })) as GoalAllocation[],
     assets: [...accountAssets, ...manualAssets],
     liabilities: rows.liabilities.map((l): ZakatLiability => ({ id: l.id, label: l.name, outstandingCents: toCents(l.outstanding_cents), due12mCents: toCents(l.due_12m_cents) })),
-    prices: { gold: latestPrice(rows.prices, 'XAU'), silver: latestPrice(rows.prices, 'XAG') },
-    zakat,
+    prices: { gold: selectMetalPrice(priceEntries, 'XAU', rows.asOf), silver: selectMetalPrice(priceEntries, 'XAG', rows.asOf) },
+    priceEntries,
+    zakat: { choices: zakatChoicesFrom(rows.zakatSettings) },
     emergencyFundMonths: 3,
   };
 }

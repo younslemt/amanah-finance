@@ -56,7 +56,7 @@ export async function activateReligiousFeatures(_prev: FormState, fd: FormData):
   if (error) { console.error('[consents] religious', error.code); return formError('Enregistrement impossible. Réessayez.'); }
   revalidatePath('/', 'layout');
   const next = String(fd.get('next') ?? '');
-  redirect(/^\/(goals|zakat|purification|finance-islamique)$/.test(next) ? next : '/finance-islamique');
+  redirect(/^\/(goals|zakat|zakat\/al-fitr|purification|dons|finance-islamique)$/.test(next) ? next : '/finance-islamique');
 }
 
 /**

@@ -15,7 +15,7 @@ const NAV = [
   { href: '/budget', also: ['/comptes', '/import'], label: fr.nav.budget, icon: 'M4 19V9m6 10V5m6 14v-7m4 7H2' },
   { href: '/goals', also: [], label: fr.nav.goals, icon: 'M12 21a9 9 0 110-18 9 9 0 010 18zm0-4a5 5 0 110-10 5 5 0 010 10zm0-4a1 1 0 110-2 1 1 0 010 2z' },
   { href: '/wealth', also: [], label: fr.nav.wealth, icon: 'M3 10l9-6 9 6M5 10v9m14-9v9M9 10v9m6-9v9M3 21h18' },
-  { href: '/finance-islamique', also: ['/zakat', '/purification'], label: fr.nav.islamicFinance, icon: 'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z' },
+  { href: '/finance-islamique', also: ['/zakat', '/purification', '/dons'], label: fr.nav.islamicFinance, icon: 'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z' },
 ] as const;
 
 function Icon({ d }: { d: string }) {

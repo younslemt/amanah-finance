@@ -82,11 +82,15 @@ export function getDemoHousehold(): HouseholdData {
     assets: [...accountsToAssets(accounts), ...DEMO_ASSETS],
     liabilities: DEMO_LIABILITIES,
     prices: DEMO_PRICES,
+    priceEntries: [
+      { symbol: 'XAU', ...DEMO_PRICES.gold, source: 'Prix fictif de démonstration' },
+      { symbol: 'XAG', ...DEMO_PRICES.silver, source: 'Prix fictif de démonstration' },
+    ],
+    // Choix fictifs d'une personne de démonstration (aucun n'est une valeur par défaut de l'application)
     zakat: {
-      hawlStart: '2025-11-20',
-      options: {
-        nisabBasis: 'silver', yearBasis: 'lunar', personalJewelry: 'exclude',
-        longTermInvestments: { mode: 'full_market_value' }, lockedPensions: 'exclude', debts: 'due_12_months',
+      choices: {
+        nisabBasis: 'silver', yearBasis: 'lunar', hawlStart: '2025-11-20', personalJewelry: 'exclude',
+        longTermInvestments: 'full_market_value', lockedPensions: 'exclude', debts: 'due_12_months', excludedSourceIds: [],
       },
     },
     emergencyFundMonths: 3,

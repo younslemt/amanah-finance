@@ -15,6 +15,8 @@ const SCREENS = [
   { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
   { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
   { path: '/purification', heading: 'Purification', nav: 'Finance islamique' },
+  { path: '/dons', heading: 'Dons et Sadaqah', nav: 'Finance islamique' },
+  { path: '/zakat/al-fitr', heading: 'Zakat al-Fitr', nav: 'Finance islamique' },
 ] as const;
 
 function visibleNav(page: Page, isMobile: boolean) {
@@ -85,6 +87,17 @@ test('les statuts de conformité reflètent les informations disponibles', async
   await page.goto('/zakat');
   await expect(page.getByText('Exigible selon le référentiel indiqué')).toBeVisible();
   await expect(page.getByText('Ce référentiel est en cours de validation par un comité charia.')).toBeVisible();
+  await expect(page.getByText(/provisoire/).first()).toBeVisible();
+  await page.goto('/dons');
+  await expect(page.getByTestId('synthese-dons')).toContainText('Dont purification');
+  await expect(page.getByText('Rapproché avec une opération bancaire', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Vérifié', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Déclaré', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Parcours de purification')).toBeVisible();
+  await page.goto('/zakat/al-fitr');
+  await expect(page.getByTestId('liste-fitr')).toContainText('Montant fictif communiqué');
+  await expect(page.getByTestId('liste-fitr')).toContainText('année civile 2026');
+  await expect(page.getByTestId('annee-hegirienne')).toContainText('aucune conversion automatique');
   await page.goto('/purification');
   await expect(page.getByText(/brut \(avant précompte mobilier\)/)).toBeVisible();
   await expect(page.getByText('À déterminer').first()).toBeVisible();
