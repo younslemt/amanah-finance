@@ -13,6 +13,8 @@ export interface Transaction {
   counterpartyName?: string;
   categorySlug?: string;
   isInterest?: boolean;
+  /** 4 derniers caractères du compte de la contrepartie, si la banque les fournit. */
+  counterpartyIbanLast4?: string;
 }
 
 export interface CategorizationRule {

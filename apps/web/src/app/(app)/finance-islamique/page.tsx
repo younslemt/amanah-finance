@@ -20,6 +20,14 @@ export default async function IslamicFinancePage({ searchParams }: { searchParam
       <>
         <PageHeader title="Finance islamique" subtitle="Zakat, purification, objectif Hajj, dons religieux" />
         <Notice>En démonstration, ces fonctions sont ouvertes avec des données fictives. En mode réel, elles demandent un consentement explicite distinct (article 9 du RGPD).</Notice>
+        <Card className="mt-4">
+          <CardTitle>Fonctions disponibles</CardTitle>
+          <ul className="grid gap-2 sm:grid-cols-3">
+            <li><Link href="/zakat" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Zakat (estimation)</Link></li>
+            <li><Link href="/purification" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Purification des intérêts</Link></li>
+            <li><Link href="/goals" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">Objectif Hajj</Link></li>
+          </ul>
+        </Card>
       </>
     );
   }

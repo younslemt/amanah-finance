@@ -150,7 +150,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 3.2.0 }
+      - name: Version de la CLI Supabase
+        run: supabase --version
       - name: Démarrer Postgres Supabase et appliquer les migrations
         run: supabase db start
       - name: Tests SQL contre l'image Supabase (sans stub)
@@ -181,7 +183,9 @@ jobs:
       - name: Installation des dépendances
         run: pnpm install --frozen-lockfile
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 3.2.0 }
+      - name: Version de la CLI Supabase
+        run: supabase --version
       - name: Démarrer Supabase local (Auth, base, boîte mail de test)
         run: supabase start -x studio,imgproxy,realtime,storage-api,edge-runtime,logflare,vector
       - name: Variables de l'environnement local

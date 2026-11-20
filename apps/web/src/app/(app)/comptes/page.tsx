@@ -7,7 +7,7 @@ import { getHouseholdData } from '@/lib/data';
 import { isDemoMode } from '@/lib/env';
 import { formatCents } from '@/lib/format';
 import { ACCOUNT_TYPE_LABELS } from '@/lib/labels';
-import { createAccount } from '../actions';
+import { createAccount, setAccountReserve } from '../actions';
 
 export const metadata: Metadata = { title: 'Mes comptes' };
 
@@ -23,9 +23,19 @@ export default async function AccountsPage() {
         {data.accounts.length === 0 ? <p className="text-ink-muted">Aucun compte pour le moment.</p> : (
           <ul className="divide-y divide-line" data-testid="liste-comptes">
             {data.accounts.map((a) => (
-              <li key={a.id} className="flex justify-between gap-3 py-3">
-                <span><span className="font-medium">{a.name}</span><span className="block text-xs text-ink-muted">{ACCOUNT_TYPE_LABELS[a.type] ?? a.type}</span></span>
-                <span className="tabular font-semibold">{formatCents(a.balanceCents)}</span>
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <span><span className="font-medium">{a.name}</span><span className="block text-xs text-ink-muted">{ACCOUNT_TYPE_LABELS[a.type] ?? a.type}
+                  {(a.countsAsReserve ?? (a.type === 'savings' || a.type === 'regulated_savings')) ? ' · compté dans la réserve de précaution' : ''}</span></span>
+                <span className="flex items-center gap-3">
+                  <span className="tabular font-semibold">{formatCents(a.balanceCents)}</span>
+                  {!isDemoMode ? (
+                    <ActionForm action={setAccountReserve} variant="quiet" testId="form-reserve"
+                      submitLabel={(a.countsAsReserve ?? (a.type === 'savings' || a.type === 'regulated_savings')) ? 'Retirer de la réserve' : 'Compter dans la réserve'}>
+                      <input type="hidden" name="accountId" value={a.id} />
+                      <input type="hidden" name="reserve" value={(a.countsAsReserve ?? (a.type === 'savings' || a.type === 'regulated_savings')) ? 'no' : 'yes'} />
+                    </ActionForm>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>

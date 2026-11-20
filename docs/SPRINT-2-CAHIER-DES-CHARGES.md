@@ -135,7 +135,7 @@ succession restent hors périmètre.
 | Lot | Contenu | Dépend de | Taille |
 | --- | --- | --- | --- |
 | 3 — Dons et Sadaqah | Saisie des contributions (Sadaqah, Zakat al-Fitr, waqf, autre), bénéficiaire libre ou référencé, totaux par type et par année, purifications déjà liées ; justificatifs dans un bucket privé par personne, avec test d'isolation du stockage | Lot 0 (owner_id, RLS) ; D6 (durée de conservation) | 3 j |
-| 4 — Dashboard financier | Tendance 6 mois (revenus, dépenses, solde), dépenses par catégorie face aux budgets, patrimoine net partiel ; bloc conformité (purification à faire, dons de l'année) seulement avec consentement ; chaque graphique doublé d'un tableau | Import (données réelles) | 3 j |
+| 4 — Dashboard financier (**remplacé par le Sprint 3**, validé le 20 novembre 2026) | Tendance 6 mois (revenus, dépenses, solde), dépenses par catégorie face aux budgets, patrimoine net partiel ; bloc conformité (purification à faire, dons de l'année) seulement avec consentement ; chaque graphique doublé d'un tableau | Import (données réelles) | 3 j |
 | 5 — Zakat de base | Réglages par personne (base du nisab, année, Hawl, options), aperçu en direct, calcul figé et historique ; aucune valeur par défaut ; référentiel « brouillon » affiché comme tel | D2 (comité charia), D5 (prix des métaux) | 4 j |
 | 6 — Import, compléments | Profils des 4 grandes banques belges sur exports fictifs ; correction de catégorie à l'aperçu ; règles de catégorisation personnelles | D4 | 2 j |
 | 7 — Foyer partagé | Invitation d'un membre, information explicite sur la confidentialité des données religieuses, rôle lecture seule | Avis juriste (Q sur foyers) | 2 j |
