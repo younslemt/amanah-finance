@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
-  apiToken, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm, visibleButton,
+  activateIslamicFinance, apiToken, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm, visibleButton,
 } from './helpers';
 
 /**
@@ -92,9 +92,12 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await expect(budget.getByRole('status')).toContainText('Budget enregistré');
   });
 
-  test('6. objectif Hajj : cible, épargne disponible, date, capacité, progression', async ({ page }) => {
+  test('6. objectif Hajj : consentement article 9, cible, épargne disponible, date, capacité, progression', async ({ page }) => {
     await signIn(page, A);
     await page.goto('/goals');
+    // Sprint 2 : l'objectif Hajj demande le consentement article 9, distinct de l'accès à l'application
+    await expect(page.getByTestId('form-hajj')).toHaveCount(0);
+    await activateIslamicFinance(page, '/goals');
     const form = page.getByTestId('form-hajj');
     await form.getByLabel('Montant cible (€)').fill('9 000');
     await form.getByLabel('Épargne déjà disponible (€)').fill('1 500');
@@ -187,16 +190,28 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test('retrait du consentement : accès suspendu puis rétabli', async ({ page }) => {
+  test('retrait du consentement article 9 : seules les fonctions religieuses sont fermées, puis rétablies', async ({ page }) => {
     await signIn(page, A);
-    await page.goto('/parametres');
-    await page.getByTestId('form-retrait-special_category').getByRole('button', { name: 'Retirer' }).click();
-    await expect(page).toHaveURL(/\/bienvenue\/consentements/);
+    await page.goto('/finance-islamique');
+    const form = page.getByTestId('form-retrait-finance-islamique');
+    await form.getByLabel(/Les conserver/).check();
+    await form.getByRole('button', { name: 'Retirer mon consentement' }).click();
+    await expect(page).toHaveURL(/\/finance-islamique\?retrait=keep/);
+    // Budget et tableau de bord restent accessibles
     await page.goto('/dashboard');
-    await expect(page).toHaveURL(/\/bienvenue\/consentements/);
-    for (const box of await page.getByRole('checkbox').all()) await box.check();
-    await page.getByRole('button', { name: 'Accepter et continuer' }).click();
-    await expect(page).toHaveURL(/\/dashboard/); // profil déjà complété
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId('dashboard-finance-islamique')).toHaveCount(0);
+    await page.goto('/budget');
+    await expect(page.getByTestId('liste-operations')).toContainText('Courses fictives');
+    // Objectif Hajj : fermé dans l'interface ET dans la base
+    await page.goto('/goals');
+    await expect(page.getByTestId('lien-activer-finance-islamique')).toBeVisible();
+    await expect(page.getByRole('article').filter({ hasText: 'Hajj' })).toHaveCount(0);
+    const goals = (await (await rest(await apiToken(A), 'goals?select=id&kind=eq.hajj')).json()) as unknown[];
+    expect(goals).toEqual([]);
+    // Nouveau consentement : données conservées retrouvées
+    await activateIslamicFinance(page, '/goals');
+    await expect(page.getByRole('article').filter({ hasText: 'Hajj' }).first()).toContainText(euros('1 500,00 €'));
   });
 
   test('suppression du compte de B : données effacées, connexion impossible', async ({ page }) => {

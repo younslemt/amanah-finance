@@ -9,6 +9,8 @@
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'amina@example.test'),
   ('00000000-0000-0000-0000-00000000000b', 'bilal@example.test');
+insert into public.consents (user_id, kind, granted, document_version, document_hash)
+  select id, 'special_category', true, 'test', repeat('a', 64) from auth.users where id in ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b');  -- article 9 (lot 0, Sprint 2)
 
 do $$
 declare n int;

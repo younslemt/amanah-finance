@@ -12,6 +12,8 @@ grant all on _results to authenticated, anon;
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000c', 'chadia@example.test'),
   ('00000000-0000-0000-0000-00000000000d', 'driss@example.test');
+insert into public.consents (user_id, kind, granted, document_version, document_hash)
+  select id, 'special_category', true, 'test', repeat('a', 64) from auth.users where id in ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000d');  -- article 9 (lot 0, Sprint 2)
 
 -- Données de Driss, créées en superutilisateur
 select set_config('t.hc', (select id::text from public.households where created_by = '00000000-0000-0000-0000-00000000000c'), false);
@@ -21,8 +23,8 @@ with acc as (
   insert into public.accounts (household_id, name) values (current_setting('t.hd')::uuid, 'Compte D') returning id
 ) select set_config('t.acc_d', (select id::text from acc), false);
 with g as (
-  insert into public.goals (household_id, kind, name, target_cents, target_date)
-  values (current_setting('t.hd')::uuid, 'hajj', 'Objectif D', 100000, date '2028-01-01') returning id
+  insert into public.goals (household_id, kind, name, target_cents, target_date, owner_id)
+  values (current_setting('t.hd')::uuid, 'hajj', 'Objectif D', 100000, date '2028-01-01', '00000000-0000-0000-0000-00000000000d') returning id
 ) select set_config('t.goal_d', (select id::text from g), false);
 with tx as (
   insert into public.transactions (household_id, account_id, booked_on, amount_cents, description, source, dedupe_hash)
@@ -30,12 +32,12 @@ with tx as (
 ) select set_config('t.tx_d', (select id::text from tx), false);
 with zc as (
   insert into public.zakat_calculations (household_id, ruleset_id, ruleset_version, engine_version, as_of, inputs, result,
-    zakatable_cents, nisab_cents, zakat_due_cents, is_above_nisab, status)
-  values (current_setting('t.hd')::uuid, 'amanah-zakat', '1.0.0', 'test', date '2026-11-01', '{}', '{}', 1, 1, 0, false, 'below_nisab') returning id
+    zakatable_cents, nisab_cents, zakat_due_cents, is_above_nisab, status, owner_id)
+  values (current_setting('t.hd')::uuid, 'amanah-zakat', '1.0.0', 'test', date '2026-11-01', '{}', '{}', 1, 1, 0, false, 'below_nisab', '00000000-0000-0000-0000-00000000000d') returning id
 ) select set_config('t.zc_d', (select id::text from zc), false);
 with c as (
-  insert into public.contributions (household_id, kind, amount_cents, paid_on)
-  values (current_setting('t.hd')::uuid, 'sadaqah', 500, date '2026-11-01') returning id
+  insert into public.contributions (household_id, kind, amount_cents, paid_on, owner_id)
+  values (current_setting('t.hd')::uuid, 'sadaqah', 500, date '2026-11-01', '00000000-0000-0000-0000-00000000000d') returning id
 ) select set_config('t.contrib_d', (select id::text from c), false);
 with bc as (
   insert into public.bank_connections (household_id, provider) values (current_setting('t.hd')::uuid, 'demo') returning id

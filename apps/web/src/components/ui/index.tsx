@@ -49,9 +49,9 @@ export function Badge({ children, tone = 'neutral' }: { children: ReactNode; ton
 }
 
 /** Avertissement de nature réglementaire ou religieuse : toujours visible, jamais en petit gris illisible. */
-export function Notice({ children, tone = 'info' }: { children: ReactNode; tone?: 'info' | 'warning' }) {
+export function Notice({ children, tone = 'info', className }: { children: ReactNode; tone?: 'info' | 'warning'; className?: string }) {
   return (
-    <div role="note" className={cn('rounded-xl border px-4 py-3 text-sm leading-relaxed', tone === 'info' ? 'border-primary-100 bg-primary-50 text-primary-900' : 'border-accent-100 bg-accent-100/60 text-ink')}>
+    <div role="note" className={cn('rounded-xl border px-4 py-3 text-sm leading-relaxed', className, tone === 'info' ? 'border-primary-100 bg-primary-50 text-primary-900' : 'border-accent-100 bg-accent-100/60 text-ink')}>
       {children}
     </div>
   );

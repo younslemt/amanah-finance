@@ -36,3 +36,21 @@ export function Checkbox({ name, label, required }: { name: string; label: React
     </label>
   );
 }
+
+/** Choix exclusif (boutons radio) dans un groupe étiqueté. */
+export function RadioGroup({ name, legend, options, defaultValue }: {
+  name: string; legend: string; options: ReadonlyArray<{ value: string; label: ReactNode }>; defaultValue?: string;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{legend}</legend>
+      {options.map((o) => (
+        <label key={o.value} className="flex items-start gap-3 text-sm">
+          <input type="radio" name={name} value={o.value} defaultChecked={o.value === defaultValue}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-primary-700)]" />
+          <span>{o.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}

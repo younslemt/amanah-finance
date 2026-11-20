@@ -4,7 +4,7 @@ import { Card, Notice, PageHeader } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
 import { Checkbox } from '@/components/forms/fields';
 import { requireSession } from '@/lib/supabase/session';
-import { LEGAL_DOCUMENTS, LEGAL_DRAFT_NOTICE, missingConsents } from '@/lib/legal/documents';
+import { APP_DOCUMENTS, LEGAL_DRAFT_NOTICE, missingConsents } from '@/lib/legal/documents';
 import { acceptConsents } from '../../actions';
 
 export const metadata: Metadata = { title: 'Consentements' };
@@ -17,7 +17,7 @@ export default async function ConsentsPage() {
       <PageHeader title="Avant de commencer" subtitle="Étape 1 sur 2 — lisez et acceptez les documents suivants." />
       <Notice tone="warning">{LEGAL_DRAFT_NOTICE}</Notice>
       <div className="mt-4 space-y-4">
-        {LEGAL_DOCUMENTS.map((d) => (
+        {APP_DOCUMENTS.map((d) => (
           <Card key={d.kind} as="article">
             <h2 className="text-lg text-primary-900">{d.title}</h2>
             <p className="mb-3 text-xs text-ink-muted">Version {d.version}</p>
@@ -27,9 +27,10 @@ export default async function ConsentsPage() {
           </Card>
         ))}
       </div>
+      <Notice className="mt-4">Les fonctions de finance islamique (Zakat, purification, objectif Hajj, dons religieux) sont facultatives. Elles demandent un consentement distinct, que vous pourrez donner plus tard depuis l’application.</Notice>
       <Card className="mt-4">
         <ActionForm action={acceptConsents} submitLabel="Accepter et continuer" testId="form-consentements">
-          {LEGAL_DOCUMENTS.map((d) => <Checkbox key={d.kind} name={`consent_${d.kind}`} label={d.checkboxLabel} required />)}
+          {APP_DOCUMENTS.map((d) => <Checkbox key={d.kind} name={`consent_${d.kind}`} label={d.checkboxLabel} required />)}
         </ActionForm>
       </Card>
     </>

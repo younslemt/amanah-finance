@@ -27,7 +27,11 @@ spécialisé en protection des données.
 | C7 | Les preuves de consentement disparaissent avec le compte | Tension entre effacement (art. 17) et obligation de pouvoir démontrer le consentement (art. 7.1) |
 | C8 | Aucune vérification d'âge | Applicabilité de l'article 8 (âge du consentement numérique en Belgique) et opportunité de réserver le service aux majeurs |
 
-## 3. Ajustements recommandés (à réaliser en lot 0 du Sprint 2, avant les fonctions Zakat et purification)
+## 3. Ajustements recommandés
+
+**Sprint 2, lot 0 (réalisé, provisoire)** : ajustements 1 à 5 en place (migration 0011, `SPRINT-2.md`).
+Choix retenu pour le point 5 : visibilité **individuelle par défaut**, partage décidé par chaque personne et
+soumis au consentement des deux parties. Ajustements 6 à 8 : en attente de décision.
 
 1. **Consentement par fonction** : les fonctions financières générales reposent sur l'exécution du contrat
    (art. 6.1.b). Le consentement article 9 n'est demandé qu'à l'activation des fonctions religieuses

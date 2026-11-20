@@ -7,6 +7,8 @@
 create temp table _r (check_name text, ok boolean, detail text);
 grant all on _r to authenticated;
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000e', 'elias@example.test');
+insert into public.consents (user_id, kind, granted, document_version, document_hash)
+  select id, 'special_category', true, 'test', repeat('a', 64) from auth.users where id in ('00000000-0000-0000-0000-00000000000e');  -- article 9 (lot 0, Sprint 2)
 select set_config('t.he', (select id::text from public.households where created_by = '00000000-0000-0000-0000-00000000000e'), false);
 
 create or replace function pg_temp.expect(name text, stmt text, should_pass boolean) returns void language plpgsql as $$

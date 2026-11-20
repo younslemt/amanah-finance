@@ -87,6 +87,7 @@ export async function saveBudget(_p: FormState, fd: FormData): Promise<FormState
 
 export async function createHajjGoal(_p: FormState, fd: FormData): Promise<FormState> {
   const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  if (!ctx.religiousEnabled) return formError('Activez d’abord les fonctions de finance islamique (consentement explicite).');
   const parsed = hajjGoalSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
   const d = parsed.data;

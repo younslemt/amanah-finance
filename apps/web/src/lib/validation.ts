@@ -114,3 +114,34 @@ export function formDataToObject(fd: FormData): Record<string, string> {
   for (const [k, v] of fd.entries()) if (typeof v === 'string') o[k] = v;
   return o;
 }
+
+// --- Purification (Sprint 2) --------------------------------------------------
+const optionalAmount = (label: string) => z.string().trim().optional().transform((v, ctx) => {
+  if (!v) return null;
+  try {
+    const cents = amountToCents(v);
+    if (cents < 0) { ctx.addIssue({ code: 'custom', message: `${label} : le montant doit être positif.` }); return z.NEVER; }
+    if (cents > 100_000_000_00) { ctx.addIssue({ code: 'custom', message: `${label} : montant trop élevé.` }); return z.NEVER; }
+    return cents;
+  } catch {
+    ctx.addIssue({ code: 'custom', message: `${label} : montant illisible (exemple : 12,34).` });
+    return z.NEVER;
+  }
+});
+
+export const purificationReviewSchema = z.object({
+  id: z.string().uuid('Élément invalide.'),
+  decision: z.enum(['confirm', 'reject', 'restore', 'unconfirm'], { message: 'Décision invalide.' }),
+  gross: optionalAmount('Montant brut'),
+  withholding: optionalAmount('Précompte mobilier'),
+}).refine((d) => d.gross === null || d.withholding === null, { message: 'Indiquez le brut OU le précompte : l’autre montant est calculé.', path: ['withholding'] });
+
+export const purificationBasisSchema = z.object({
+  basis: z.enum(['gross', 'net_credited'], { message: 'Choisissez une méthodologie.' }),
+});
+
+export const purificationRecordSchema = z.object({
+  itemIds: z.array(z.string().uuid()).min(1, 'Sélectionnez au moins un élément confirmé.').max(500),
+  paidOn: isoDate('Date de la purification'),
+  beneficiary: z.string().trim().min(1, 'Indiquez le bénéficiaire.').max(120, 'Nom du bénéficiaire trop long.'),
+});

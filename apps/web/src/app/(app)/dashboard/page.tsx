@@ -6,7 +6,7 @@ import { formatCents, formatMonth, formatPermille } from '@/lib/format';
 import { interpolate } from '@/lib/i18n';
 import { fr } from '@/messages/fr';
 import { isDemoMode } from '@/lib/env';
-import { getSessionContext } from '@/lib/supabase/session';
+import { religiousAccess } from '@/lib/supabase/session';
 
 export const metadata: Metadata = { title: fr.nav.dashboard };
 
@@ -18,8 +18,9 @@ function SeeAll({ href }: { href: string }) {
 }
 
 export default async function DashboardPage() {
+  const { enabled: religious, ctx } = await religiousAccess();
   const s = await getSnapshot();
-  const displayName = isDemoMode ? null : (await getSessionContext())?.displayName ?? null;
+  const displayName = isDemoMode ? null : ctx?.displayName ?? null;
   const t = fr.dashboard;
   const greeting = displayName ? `${t.greeting}, ${displayName}` : t.greeting;
   const current = s.month; // mois en cours : les saisies apparaissent immédiatement
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
           <ul className="mt-4 grid gap-2 sm:grid-cols-3">
             <li><Link href="/comptes" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">1. Ajouter un compte</Link></li>
             <li><Link href="/budget" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">2. Saisir revenus et dépenses</Link></li>
-            <li><Link href="/goals" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">3. Créer un objectif Hajj</Link></li>
+            <li><Link href="/import" className="block rounded-lg border border-line p-3 text-sm font-medium text-primary-800 hover:bg-mist">3. Importer un relevé CSV</Link></li>
           </ul>
         </Card>
       </>
@@ -88,7 +89,8 @@ export default async function DashboardPage() {
         )}
       </Card>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      {religious ? (<>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2" data-testid="dashboard-finance-islamique">
         <Card>
           <CardTitle action={<SeeAll href="/zakat" />}>{t.zakat}</CardTitle>
           <div className="mb-2"><Badge tone={zakatTone[s.zakat.status]}>{fr.zakat.status[s.zakat.status]}</Badge></div>
@@ -97,11 +99,21 @@ export default async function DashboardPage() {
         </Card>
         <Card>
           <CardTitle action={<SeeAll href="/purification" />}>{t.purification}</CardTitle>
-          <Stat label={interpolate(t.purificationHint, { count: s.purification.candidates.length })} value={formatCents(s.purification.detectedCreditedCents)} />
+          {s.purification.summary ? (
+            <Stat label="À purifier (montants déterminés)" value={formatCents(s.purification.summary.toPurifyCents)}
+              hint={`${formatCents(s.purification.summary.detectedCreditedCents)} à examiner · ${formatCents(s.purification.summary.purifiedCents)} purifié`} />
+          ) : <Stat label={interpolate(t.purificationHint, { count: s.purification.candidates.length })} value={formatCents(s.purification.detectedCreditedCents)} />}
         </Card>
       </div>
 
       <div className="mt-6"><Notice>{fr.zakat.disclaimer}</Notice></div>
+      </>) : (
+        <Card className="mt-4">
+          <CardTitle>Finance islamique</CardTitle>
+          <p className="text-sm text-ink-muted">Zakat, purification des intérêts et objectif Hajj sont facultatifs et demandent un consentement distinct.</p>
+          <Link href="/finance-islamique" className="mt-3 inline-block text-sm font-medium text-primary-700 underline-offset-4 hover:underline">Activer ces fonctions</Link>
+        </Card>
+      )}
     </>
   );
 }

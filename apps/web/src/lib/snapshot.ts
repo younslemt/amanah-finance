@@ -5,7 +5,7 @@
 import {
   calculateZakat, computeNetWorth, detectInterest, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
   type CategoryInfo, type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
-  type PurificationCandidate, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
+  summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
   type ZakatOptions, type ZakatResult,
 } from '@amanah/engines';
 
@@ -25,6 +25,8 @@ export interface HouseholdData {
   prices: { gold: MetalPrice | null; silver: MetalPrice | null };
   zakat: { options: ZakatOptions; hawlStart?: string };
   emergencyFundMonths: 3 | 6;
+  /** Mode réel : éléments de purification visibles (consentement article 9) ; absent en démonstration. */
+  purificationItems?: PurificationItem[];
 }
 
 export interface HouseholdSnapshot {
@@ -37,7 +39,7 @@ export interface HouseholdSnapshot {
   emergencyFund: ReturnType<typeof planEmergencyFund>;
   goals: Array<{ goal: Goal; plan: GoalPlan }>;
   zakat: ZakatResult;
-  purification: { candidates: PurificationCandidate[]; detectedCreditedCents: number };
+  purification: { candidates: PurificationCandidate[]; detectedCreditedCents: number; summary: PurificationSummary | null };
 }
 
 const LIQUID = new Set(['current', 'savings', 'regulated_savings', 'cash']);
@@ -100,6 +102,6 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     emergencyFund,
     goals,
     zakat,
-    purification: { candidates, detectedCreditedCents: candidates.reduce((s, c) => s + c.creditedCents, 0) },
+    purification: { candidates, detectedCreditedCents: candidates.reduce((s, c) => s + c.creditedCents, 0), summary: data.purificationItems ? summarizePurification(data.purificationItems) : null },
   };
 }
