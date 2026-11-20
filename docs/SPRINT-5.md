@@ -68,4 +68,20 @@ Les Sprints 6 et 7 n’ont pas été commencés. Moteurs réutilisés : `goals`,
 | Playwright réel (Supabase local) | `e2e-live/sprint5.spec.ts` : projet général sans consentement et projets religieux refusés, parcours complet avec historique, Omra privé et isolation, Aïd (estimation puis confirmation avec source), reconduction unique sans reprise des montants, plan d’épargne avec dépassement et priorités, R7 |
 | Non-régression | Toutes les suites des Sprints 0 à 4, inchangées |
 
-Résultats : voir la Pull Request (CI à 4 jobs).
+## Corrections trouvées pendant la recette
+
+- **Saisie perdue après une erreur** (tous les formulaires) : React 19 vidait le formulaire après chaque action serveur. Après une erreur (par exemple une date « confirmée » sans source), un second envoi enregistrait donc une autre valeur que celle voulue. `ActionForm` conserve désormais la saisie en cas d’erreur et ne vide le formulaire qu’après un enregistrement réussi.
+- **Débordement mobile** : la source de la date de l’Aïd, un texte libre, était affichée dans un badge insécable. La page débordait et se dézoomait sur smartphone. Le texte est maintenant renvoyé à la ligne, et un test e2e vérifie l’absence de défilement horizontal.
+
+## Résultats (CI du commit `85c1c4d`, 4 jobs verts)
+
+| Suite | Résultat |
+| --- | --- |
+| Moteurs (`packages/engines`) | 137 tests réussis |
+| Banque fictive (`packages/banking`) | 13 tests réussis |
+| Application (`apps/web`, formulaires et vues) | 100 tests réussis |
+| SQL, RLS et isolation (PostgreSQL 16 et image Supabase réelle) | Toutes les assertions passent sur les deux bases |
+| Playwright démo, mobile et ordinateur | 59 réussis, 1 ignoré (test clavier, volontairement limité à l’ordinateur, inchangé depuis le Sprint 1) |
+| Playwright réel (Supabase local), mobile et ordinateur | 68 réussis |
+
+Non vérifié : lancement sous Windows (voir `docs/LANCEMENT-WINDOWS.md`), installation sur un vrai smartphone, déploiement (non autorisé).
