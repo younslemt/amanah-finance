@@ -8,7 +8,9 @@ import { isDemoMode } from '@/lib/env';
 import { formatCents, formatDate, formatMonth } from '@/lib/format';
 import { categoryLabel, selectableCategories } from '@/lib/labels';
 import { fr } from '@/messages/fr';
-import { createCategory, createTransaction, deleteTransaction, markNotRecurring, saveBudget, saveCategoryNature } from '../actions';
+import { createCategory, createTransaction, decideTransfer, deleteTransaction, markNotRecurring, saveBudget, saveCategoryNature } from '../actions';
+import { CoverageNotice } from '@/components/finance/coverage-notice';
+import { TRANSFER_REASON } from '@/lib/coverage-text';
 import { IncomeExpenseChart } from '@/components/finance/charts';
 
 export const metadata: Metadata = { title: fr.budget.title };
@@ -140,7 +142,8 @@ export default async function BudgetPage() {
       ) : null}
     
       <Card className="mt-4">
-        <h2 id="evolution" className="mb-3 text-lg text-primary-900">Évolution sur {s.analysis.monthsWithData} mois complets</h2>
+        <h2 id="evolution" className="mb-3 text-lg text-primary-900">Évolution sur {s.analysis.months.length} mois</h2>
+        <div className="mb-3"><CoverageNotice coverage={s.analysis.coverage} accountName={(id) => accountName.get(id) ?? 'Compte'} /></div>
         {s.analysis.months.length === 0 ? <p className="text-ink-muted">Pas encore de mois complet à comparer.</p> : (
           <>
             <IncomeExpenseChart months={s.analysis.months} />
@@ -154,6 +157,39 @@ export default async function BudgetPage() {
           </>
         )}
       </Card>
+
+      {s.analysis.transfers.some((m) => m.status === 'uncertain') ? (
+        <Card className="mt-4">
+          <h2 className="mb-1 text-lg text-primary-900">Virements à confirmer</h2>
+          <p className="mb-3 text-sm text-ink-muted">Même montant, sens opposés, deux de vos comptes, à quelques jours d’intervalle, mais sans preuve suffisante. Tant que vous ne confirmez pas, les deux opérations restent comptées normalement.</p>
+          <ul className="divide-y divide-line" data-testid="virements-a-confirmer">
+            {s.analysis.transfers.filter((m) => m.status === 'uncertain').map((m) => {
+              const d = data.transactions.find((x) => x.id === m.debitId);
+              const c = data.transactions.find((x) => x.id === m.creditId);
+              return (
+                <li key={m.key} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                  <div>
+                    <p className="font-medium tabular">{formatCents(m.amountCents)}</p>
+                    <p className="text-ink-muted">{formatDate(m.debitDate)} : {d?.description ?? 'débit'} ({accountName.get(m.debitAccountId) ?? 'compte'}) → {formatDate(m.creditDate)} : {c?.description ?? 'crédit'} ({accountName.get(m.creditAccountId) ?? 'compte'})</p>
+                    {m.reasons.length ? <p className="text-xs text-ink-muted">Indices : {m.reasons.map((r) => TRANSFER_REASON[r]).join(', ')}</p> : null}
+                  </div>
+                  {!isDemoMode ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(['confirmed', 'rejected'] as const).map((v) => (
+                        <ActionForm key={v} action={decideTransfer} variant="quiet" submitLabel={v === 'confirmed' ? 'C’est un virement entre mes comptes' : 'Ce sont deux opérations distinctes'} testId={`virement-${v}`}>
+                          <input type="hidden" name="debitId" value={m.debitId} />
+                          <input type="hidden" name="creditId" value={m.creditId} />
+                          <input type="hidden" name="verdict" value={v} />
+                        </ActionForm>
+                      ))}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card className="mt-4">
         <h2 id="recurrentes" className="mb-3 text-lg text-primary-900">Charges et revenus récurrents</h2>

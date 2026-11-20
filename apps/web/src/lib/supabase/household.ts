@@ -35,7 +35,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   const recentTransactions: unknown[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase.from('transactions')
-      .select('id, account_id, booked_on, amount_cents, currency, description, counterparty_name, category_slug, is_interest')
+      .select('id, account_id, booked_on, amount_cents, currency, description, counterparty_name, counterparty_iban_last4, category_slug, is_interest')
       .eq('household_id', hid).gte('booked_on', since).order('booked_on', { ascending: false }).order('id').range(from, from + PAGE - 1);
     if (error) throw error;
     recentTransactions.push(...(data ?? []));
@@ -59,6 +59,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('household_category_settings').select('category_slug, nature').eq('household_id', hid),
     supabase.from('recurring_feedback').select('series_key').eq('household_id', hid),
     supabase.from('recommendation_feedback').select('fingerprint, status, snooze_until').eq('household_id', hid).eq('user_id', auth.user.id),
+    supabase.from('transfer_decisions').select('debit_id, credit_id, verdict').eq('household_id', hid),
   ]);
   const failed = q.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -85,6 +86,8 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   }));
   data.natureOverrides = Object.fromEntries(((q[11].data ?? []) as Array<{ category_slug: string; nature: 'fixed' | 'variable' }>).map((r) => [r.category_slug, r.nature]));
   data.notRecurring = ((q[12].data ?? []) as Array<{ series_key: string }>).map((r) => r.series_key);
+  data.transferDecisions = ((q[14].data ?? []) as Array<{ debit_id: string; credit_id: string; verdict: 'confirmed' | 'rejected' }>)
+    .map((r) => [`${r.debit_id}|${r.credit_id}`, r.verdict] as [string, 'confirmed' | 'rejected']);
   // Une recommandation reportée réapparaît à la date choisie
   data.hiddenRecommendations = ((q[13].data ?? []) as Array<{ fingerprint: string; status: string; snooze_until: string | null }>)
     .filter((r) => r.status !== 'snoozed' || (r.snooze_until !== null && r.snooze_until > asOf)).map((r) => r.fingerprint);

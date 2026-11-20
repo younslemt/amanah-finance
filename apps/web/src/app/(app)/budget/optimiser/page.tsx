@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { categoryMedian, trackScenario, type Adjustment, type ScenarioBaseline } from '@amanah/engines';
 import { Badge, Card, CardTitle, Notice, PageHeader, Stat } from '@/components/ui';
 import { SplitBar } from '@/components/finance/charts';
+import { CoverageNotice } from '@/components/finance/coverage-notice';
 import { ScenarioBuilder } from '@/components/finance/scenario-builder';
 import { getHouseholdData, getSnapshot } from '@/lib/data';
 import { isDemoMode } from '@/lib/env';
@@ -51,6 +52,7 @@ export default async function OptimizePage({ searchParams }: { searchParams: Pro
           <CardTitle>1. Analyser</CardTitle>
           <Badge tone={a.reliability === 'insufficient' ? 'warning' : 'neutral'}>{RELIABILITY[a.reliability]}</Badge>
         </div>
+        <div className="mb-3"><CoverageNotice coverage={a.coverage} accountName={(id) => data.accounts.find((x) => x.id === id)?.name ?? 'Compte'} /></div>
         {a.reliability === 'insufficient' ? (
           <p className="text-sm">Nous disposons de {a.monthsWithData} mois complet(s). Il en faut au moins 3 pour chiffrer votre capacité d’épargne et simuler des économies. <Link href="/import" className="font-medium text-primary-700 underline">Importer un relevé</Link></p>
         ) : (
@@ -68,7 +70,7 @@ export default async function OptimizePage({ searchParams }: { searchParams: Pro
                 { label: cap.estimatedCents! >= 0 ? 'Capacité d’épargne' : 'Déficit', cents: Math.abs(cap.estimatedCents!), tone: cap.estimatedCents! >= 0 ? 'mist' : 'critical' },
               ]} />
             </div>
-            <p className="mt-3 text-xs text-ink-muted">Médianes sur {a.monthsWithData} mois complets ({formatMonth(a.months[0].month)} à {formatMonth(a.months[a.months.length - 1].month)}). Virements entre vos comptes, intérêts et remboursements ne sont jamais comptés comme revenus ; les dépenses exceptionnelles sont exclues de la capacité estimée.</p>
+            <p className="mt-3 text-xs text-ink-muted">Médianes sur {a.monthsWithData} mois complets ({formatMonth(a.coverage.completeMonths[0])} à {formatMonth(a.coverage.completeMonths[a.coverage.completeMonths.length - 1])}). Virements entre vos comptes, intérêts et remboursements ne sont jamais comptés comme revenus ; les dépenses exceptionnelles sont exclues de la capacité estimée.</p>
           </>
         )}
       </Card>

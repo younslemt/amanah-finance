@@ -9,7 +9,7 @@ import type { HouseholdAccount, HouseholdData } from './snapshot.ts';
 
 // --- Lignes de la base (sous-ensemble des colonnes lues) ----------------------
 export interface AccountRow { id: string; name: string; type: string; currency: string; iban_last4: string | null; opening_balance_cents: number | string; archived: boolean; counts_as_reserve?: boolean | null }
-export interface TransactionRow { id: string; account_id: string; booked_on: string; amount_cents: number | string; currency: string; description: string; counterparty_name: string | null; category_slug: string | null; is_interest: boolean }
+export interface TransactionRow { id: string; account_id: string; booked_on: string; amount_cents: number | string; currency: string; description: string; counterparty_name: string | null; category_slug: string | null; is_interest: boolean; counterparty_iban_last4?: string | null }
 export interface CategoryRow { slug: string; kind: 'income' | 'expense' | 'transfer'; is_essential: boolean; is_interest: boolean; household_id: string | null; label?: string | null; default_nature?: 'fixed' | 'variable' | null }
 export interface BudgetRow { category_slug: string; limit_cents: number | string; month: string }
 export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string; monthly_capacity_cents?: number | string | null }
@@ -93,6 +93,7 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
     id: t.id, accountId: t.account_id, bookedOn: t.booked_on, amountCents: toCents(t.amount_cents),
     currency: t.currency as Transaction['currency'], description: t.description,
     counterpartyName: t.counterparty_name ?? undefined, categorySlug: t.category_slug ?? undefined, isInterest: t.is_interest,
+    ...(t.counterparty_iban_last4 ? { counterpartyIbanLast4: t.counterparty_iban_last4 } : {}),
   }));
 
   const accountAssets: ZakatAsset[] = accounts

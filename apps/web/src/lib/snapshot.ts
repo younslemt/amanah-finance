@@ -26,6 +26,8 @@ export interface HouseholdData {
   notRecurring?: string[];
   /** Recommandations écartées, faites ou reportées par la personne connectée. */
   hiddenRecommendations?: string[];
+  /** Décisions du foyer sur les rapprochements de virements (clé « débit|crédit »). */
+  transferDecisions?: Array<[string, 'confirmed' | 'rejected']>;
   goals: Goal[];
   allocations: GoalAllocation[];
   /** Tous les actifs, y compris les soldes de comptes (voir accountsToAssets). */
@@ -109,7 +111,8 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     transactions: data.transactions,
     categories: data.categories,
     budgets: data.budgetHistory ?? data.budget.map((b) => ({ ...b, month: currentMonth })),
-    accounts: data.accounts.map((a) => ({ id: a.id, type: a.type, balanceCents: a.balanceCents, countsAsReserve: a.countsAsReserve })),
+    accounts: data.accounts.map((a) => ({ id: a.id, type: a.type, balanceCents: a.balanceCents, countsAsReserve: a.countsAsReserve, ibanLast4: a.ibanLast4 })),
+    transferDecisions: new Map(data.transferDecisions ?? []),
     natureOverrides: data.natureOverrides,
     notRecurring: new Set(data.notRecurring ?? []),
     reserveMonths: data.emergencyFundMonths,

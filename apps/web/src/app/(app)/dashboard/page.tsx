@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Badge, Card, CardTitle, Notice, PageHeader, Progress, Stat } from '@/components/ui';
-import { getSnapshot } from '@/lib/data';
+import { getHouseholdData, getSnapshot } from '@/lib/data';
 import { formatCents, formatMonth } from '@/lib/format';
 import { IncomeExpenseChart } from '@/components/finance/charts';
 import { RecommendationCard } from '@/components/finance/recommendation-card';
 import { nextActions } from '@/lib/next-actions';
 import { RECOMMENDATION_NOTICE } from '@/lib/recommendation-text';
+import { CoverageNotice } from '@/components/finance/coverage-notice';
 import { interpolate } from '@/lib/i18n';
 import { fr } from '@/messages/fr';
 import { isDemoMode } from '@/lib/env';
@@ -23,7 +24,8 @@ function SeeAll({ href }: { href: string }) {
 
 export default async function DashboardPage() {
   const { enabled: religious, ctx } = await religiousAccess();
-  const s = await getSnapshot();
+  const [s, data] = await Promise.all([getSnapshot(), getHouseholdData()]);
+  const accountName = (id: string) => data.accounts.find((x) => x.id === id)?.name ?? 'Compte';
   const displayName = isDemoMode ? null : ctx?.displayName ?? null;
   const t = fr.dashboard;
   const greeting = displayName ? `${t.greeting}, ${displayName}` : t.greeting;
@@ -84,8 +86,14 @@ export default async function DashboardPage() {
         {/* 3. Capacité d'épargne */}
         <Card className="lg:col-span-2">
           <CardTitle action={<SeeAll href="/budget/optimiser" />}>Capacité d’épargne</CardTitle>
-          {!enough ? <p className="text-sm text-ink-muted" data-testid="capacite-insuffisante">Données insuffisantes : 3 mois complets sont nécessaires.</p> : (
+          {!enough ? (
+            <div className="space-y-2 text-sm" data-testid="capacite-insuffisante">
+              <p className="text-ink-muted">Données insuffisantes : 3 mois complets sont nécessaires.</p>
+              {a.months.length ? <CoverageNotice coverage={a.coverage} accountName={accountName} /> : null}
+            </div>
+          ) : (
             <div className="space-y-3" data-testid="capacite">
+              <CoverageNotice compact coverage={a.coverage} accountName={accountName} />
               <Stat label="Estimée (revenus réguliers − charges)" value={formatCents(cap.estimatedCents!, { round: true })} tone={cap.estimatedCents! < 0 ? 'critical' : 'positive'} hint="hors dépenses et revenus exceptionnels" />
               <Stat label="Observée (solde réel médian)" value={formatCents(cap.observedCents!, { round: true })} hint={`sur ${a.monthsWithData} mois`} />
               {a.reserve ? (

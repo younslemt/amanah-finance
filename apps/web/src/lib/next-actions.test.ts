@@ -41,3 +41,20 @@ describe('textes des recommandations', () => {
     for (const r of s.recommendations) expect(impactText(r) ?? '').not.toMatch(/économisé/);
   });
 });
+
+describe('couverture et virements (démonstration)', () => {
+  const s = buildSnapshot(getDemoHousehold());
+  it('la démonstration est complète sur 3 mois et ses virements vers l’épargne sont confirmés', () => {
+    expect(s.analysis.coverage.status).toBe('complete');
+    expect(s.analysis.monthsWithData).toBe(3);
+    expect(s.analysis.transfers.filter((m) => m.status === 'confirmed').length).toBeGreaterThanOrEqual(1);
+    expect(s.analysis.transfers.some((m) => m.status === 'uncertain')).toBe(false);
+  });
+  it('décrit chaque manque de couverture en clair', async () => {
+    const { coverageIssueText } = await import('./coverage-text.ts');
+    const name = () => 'Compte courant';
+    expect(coverageIssueText({ code: 'month_gap', accountId: 'a', month: '2026-07' }, name)).toContain('juillet 2026');
+    expect(coverageIssueText({ code: 'account_without_transactions', accountId: 'a' }, name)).toContain('aucune opération');
+    expect(coverageIssueText({ code: 'statement_stops_early', accountId: 'a', month: '2026-10' }, name)).toContain('exclu des calculs');
+  });
+});

@@ -28,17 +28,53 @@ export interface AppliedAdjustment {
   categorySlug: string | null;
 }
 
-export interface GoalImpact {
+/** Rythme d'épargne actuel d'un objectif : capacité déclarée, sinon rythme observé, sinon aucun. */
+export function goalPace(goal: Goal, observedPaceCents?: Cents): Cents {
+  return Math.max(0, goal.monthlyCapacityCents ?? observedPaceCents ?? 0);
+}
+
+/**
+ * Simulation INDIVIDUELLE : toute l'économie est affectée à cet objectif seul.
+ * Les simulations individuelles sont des alternatives : elles ne s'additionnent pas.
+ */
+export interface IndividualGoalImpact {
   goalId: string;
   name: string;
   kind: Goal['kind'];
-  /** Rythme actuel : capacité déclarée, sinon rythme observé, sinon aucun. */
-  paceBeforeCents: Cents | null;
+  paceBeforeCents: Cents;
   paceAfterCents: Cents;
   before: GoalPlan;
   after: GoalPlan;
   /** Mois gagnés (positif = plus tôt) ; null si l'une des dates est inconnue. */
   monthsGained: number | null;
+  /** Toujours vrai : alternative exclusive, non cumulable avec les autres objectifs. */
+  exclusive: true;
+}
+
+/** Répartition GLOBALE : une même somme n'est jamais affectée à deux objectifs. */
+export interface GlobalGoalImpact {
+  goalId: string;
+  name: string;
+  kind: Goal['kind'];
+  /** Rythme actuel de l'objectif (déjà engagé, déjà compté dans la capacité affectée). */
+  paceCents: Cents;
+  /** Complément proposé sur la capacité disponible, sans le scénario puis avec. */
+  extraBeforeCents: Cents;
+  extraAfterCents: Cents;
+  before: GoalPlan;
+  after: GoalPlan;
+  monthsGained: number | null;
+}
+
+export interface CapacityBreakdown {
+  /** Capacité d'épargne estimée (structurelle). */
+  estimatedCents: Cents | null;
+  /** Déjà engagé sur les objectifs (rythmes actuels). */
+  committedCents: Cents;
+  /** Capacité réellement disponible = estimée − engagée (peut être négative). */
+  availableCents: Cents | null;
+  /** Disponible après le scénario. */
+  availableAfterCents: Cents | null;
 }
 
 export interface Simulation {
@@ -55,13 +91,23 @@ export interface Simulation {
   potentialMonthlyCents: Cents;
   potentialAnnualCents: Cents;
   after: { capacityCents: Cents | null };
+  capacity: CapacityBreakdown;
   reserve: { gapCents: Cents; monthsToTargetBefore: number | null; monthsToTargetAfter: number | null } | null;
-  goals: GoalImpact[];
+  /** Répartition globale de la capacité disponible entre les objectifs (avant / après scénario). */
+  allocation: {
+    lines: GlobalGoalImpact[];
+    allocatedBeforeCents: Cents;
+    allocatedAfterCents: Cents;
+    /** Capacité disponible après scénario restant non affectée. */
+    unallocatedAfterCents: Cents;
+  };
+  /** Simulations individuelles (alternatives exclusives, jamais additionnées). */
+  individual: IndividualGoalImpact[];
 }
 
 /** Dépense médiane mensuelle d'une catégorie sur les mois analysés. */
 export function categoryMedian(analysis: FinancialAnalysis, slug: string): Cents {
-  return median(analysis.months.map((m) => Math.max(0, m.categories[slug] ?? 0)));
+  return median(analysis.months.filter((m) => m.complete).map((m) => Math.max(0, m.categories[slug] ?? 0)));
 }
 
 /**
@@ -108,9 +154,17 @@ function monthsTo(gap: Cents, monthly: Cents | null): number | null {
   return Math.ceil(gap / monthly);
 }
 
+const gained = (a: GoalPlan, b: GoalPlan) => (a.projectedMonthsAtCurrentPace !== null && b.projectedMonthsAtCurrentPace !== null
+  ? a.projectedMonthsAtCurrentPace - b.projectedMonthsAtCurrentPace : null);
+
 /**
- * Simule des ajustements. L'économie est appliquée, pour chaque objectif pris
- * isolément, en plus de son rythme actuel (« si cette économie lui est affectée »).
+ * Simule des ajustements et en mesure l'effet sur trois plans distincts :
+ * - capacité : estimée, déjà engagée sur les objectifs, réellement disponible (avant / après) ;
+ * - répartition globale : la capacité disponible est répartie entre objectifs (en retard
+ *   d'abord, puis par échéance) sans jamais dépasser ce qui est disponible : aucune double
+ *   allocation ; l'effet du scénario = répartition après − répartition avant ;
+ * - simulations individuelles : « si toute l'économie allait à cet objectif », alternatives
+ *   exclusives présentées comme telles.
  */
 export function simulateScenario(
   analysis: FinancialAnalysis,
@@ -123,31 +177,45 @@ export function simulateScenario(
     fixedExpenseCents: analysis.capacity.fixedExpenseCents,
     variableExpenseCents: analysis.capacity.variableExpenseCents,
   };
+  const paces = goals.map((g) => goalPace(g.goal, g.observedPaceCents));
+  const committed = paces.reduce((s, p) => s + p, 0);
   const empty: Simulation = {
     available: false, reason: 'insufficient_data', current, applied: [], potentialMonthlyCents: 0, potentialAnnualCents: 0,
-    after: { capacityCents: current.capacityCents }, reserve: null, goals: [],
+    after: { capacityCents: current.capacityCents },
+    capacity: { estimatedCents: current.capacityCents, committedCents: committed, availableCents: null, availableAfterCents: null },
+    reserve: null, allocation: { lines: [], allocatedBeforeCents: 0, allocatedAfterCents: 0, unallocatedAfterCents: 0 }, individual: [],
   };
-  if (analysis.reliability === 'insufficient') return empty;
+  if (analysis.reliability === 'insufficient' || current.capacityCents === null) return empty;
   const applied = applyAdjustments(analysis, adjustments);
   const potential = applied.reduce((s, a) => s + a.monthlyCents, 0);
-  const afterCapacity = current.capacityCents === null ? null : current.capacityCents + potential;
+  const afterCapacity = current.capacityCents + potential;
+  const available = current.capacityCents - committed;
+  const availableAfter = available + potential;
 
   const reserve = analysis.reserve
     ? {
       gapCents: analysis.reserve.gapCents,
-      monthsToTargetBefore: monthsTo(analysis.reserve.gapCents, current.capacityCents),
-      monthsToTargetAfter: monthsTo(analysis.reserve.gapCents, afterCapacity),
+      monthsToTargetBefore: monthsTo(analysis.reserve.gapCents, Math.max(0, available)),
+      monthsToTargetAfter: monthsTo(analysis.reserve.gapCents, Math.max(0, availableAfter)),
     }
     : null;
 
-  const goalImpacts: GoalImpact[] = goals.map(({ goal, allocations, observedPaceCents }) => {
-    const paceBefore = goal.monthlyCapacityCents ?? observedPaceCents ?? null;
-    const paceAfter = (paceBefore ?? 0) + potential;
-    const before = planGoal(goal, allocations, analysis.asOf, observedPaceCents);
-    const after = planGoal({ ...goal, monthlyCapacityCents: paceAfter }, allocations, analysis.asOf);
-    const gained = before.projectedMonthsAtCurrentPace !== null && after.projectedMonthsAtCurrentPace !== null
-      ? before.projectedMonthsAtCurrentPace - after.projectedMonthsAtCurrentPace : null;
-    return { goalId: goal.id, name: goal.name, kind: goal.kind, paceBeforeCents: paceBefore, paceAfterCents: paceAfter, before, after, monthsGained: gained };
+  // Plans au rythme actuel (base commune)
+  const base = goals.map((g, i) => ({ ...g, pace: paces[i], plan: planGoal({ ...g.goal, monthlyCapacityCents: paces[i] }, g.allocations, analysis.asOf) }));
+  const before = allocateShortfalls(Math.max(0, available), base.map((b) => ({ goal: b.goal, plan: b.plan, paceCents: b.pace })));
+  const after = allocateShortfalls(Math.max(0, availableAfter), base.map((b) => ({ goal: b.goal, plan: b.plan, paceCents: b.pace })));
+  const extraOf = (p: AllocationProposal, id: string) => p.lines.find((l) => l.goalId === id)?.proposedCents ?? 0;
+
+  const lines: GlobalGoalImpact[] = base.map((b) => {
+    const xb = extraOf(before, b.goal.id), xa = extraOf(after, b.goal.id);
+    const pb = planGoal({ ...b.goal, monthlyCapacityCents: b.pace + xb }, b.allocations, analysis.asOf);
+    const pa = planGoal({ ...b.goal, monthlyCapacityCents: b.pace + xa }, b.allocations, analysis.asOf);
+    return { goalId: b.goal.id, name: b.goal.name, kind: b.goal.kind, paceCents: b.pace, extraBeforeCents: xb, extraAfterCents: xa, before: pb, after: pa, monthsGained: gained(pb, pa) };
+  });
+
+  const individual: IndividualGoalImpact[] = base.map((b) => {
+    const pa = planGoal({ ...b.goal, monthlyCapacityCents: b.pace + potential }, b.allocations, analysis.asOf);
+    return { goalId: b.goal.id, name: b.goal.name, kind: b.goal.kind, paceBeforeCents: b.pace, paceAfterCents: b.pace + potential, before: b.plan, after: pa, monthsGained: gained(b.plan, pa), exclusive: true };
   });
 
   return {
@@ -157,7 +225,15 @@ export function simulateScenario(
     potentialMonthlyCents: potential,
     potentialAnnualCents: potential * 12,
     after: { capacityCents: afterCapacity },
-    reserve, goals: goalImpacts,
+    capacity: { estimatedCents: current.capacityCents, committedCents: committed, availableCents: available, availableAfterCents: availableAfter },
+    reserve,
+    allocation: {
+      lines,
+      allocatedBeforeCents: Math.max(0, available) - before.unallocatedCents,
+      allocatedAfterCents: Math.max(0, availableAfter) - after.unallocatedCents,
+      unallocatedAfterCents: after.unallocatedCents,
+    },
+    individual,
   };
 }
 
@@ -169,21 +245,33 @@ export interface AllocationProposal {
   unallocatedCents: Cents;
 }
 
-/** Répartit une capacité mensuelle : objectifs en retard d'abord, puis par échéance. Proposition seulement. */
-export function proposeAllocation(capacityCents: Cents, goals: ReadonlyArray<{ goal: Goal; plan: GoalPlan }>): AllocationProposal {
+/**
+ * Répartit une capacité mensuelle entre objectifs : objectifs en retard d'abord, puis par
+ * échéance. Chaque objectif reçoit au plus ce qui lui manque (mensualité requise − rythme
+ * actuel). La somme proposée ne dépasse jamais la capacité : aucune double allocation.
+ */
+export function allocateShortfalls(
+  capacityCents: Cents,
+  goals: ReadonlyArray<{ goal: Goal; plan: GoalPlan; paceCents?: Cents }>,
+): AllocationProposal {
   let left = Math.max(0, capacityCents);
   const urgency = (s: GoalPlan['status']) => (s === 'overdue' ? 0 : s === 'behind' ? 1 : 2);
   const ordered = goals.filter((g) => g.plan.status !== 'achieved' && g.plan.remainingCents > 0)
     .sort((a, b) => urgency(a.plan.status) - urgency(b.plan.status)
       || (a.goal.targetDate < b.goal.targetDate ? -1 : a.goal.targetDate > b.goal.targetDate ? 1 : 0)
       || (a.goal.id < b.goal.id ? -1 : 1));
-  const lines = ordered.map(({ goal, plan }) => {
-    const required = plan.monthlyRequiredCents;
+  const lines = ordered.map(({ goal, plan, paceCents }) => {
+    const required = Math.max(0, plan.monthlyRequiredCents - (paceCents ?? 0));
     const proposed = Math.min(required, left);
     left -= proposed;
     return { goalId: goal.id, requiredCents: required, proposedCents: proposed };
   });
   return { lines, unallocatedCents: left };
+}
+
+/** Compatibilité : répartition sans rythme actuel connu. */
+export function proposeAllocation(capacityCents: Cents, goals: ReadonlyArray<{ goal: Goal; plan: GoalPlan; paceCents?: Cents }>): AllocationProposal {
+  return allocateShortfalls(capacityCents, goals);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +308,7 @@ export function scenarioBaseline(analysis: FinancialAnalysis, adjustments: reado
 
 /** Compare, après coup, les dépenses réelles aux objectifs du scénario (catégories visées). */
 export function trackScenario(analysis: FinancialAnalysis, adjustments: readonly Adjustment[], baseline: ScenarioBaseline): ScenarioTracking {
-  const after = analysis.months.filter((m) => m.month > monthKey(baseline.createdOn));
+  const after = analysis.months.filter((m) => m.complete && m.month > monthKey(baseline.createdOn));
   const months = after.map((m) => m.month);
   const cuts = new Map<string, number>();
   for (const a of adjustments) {

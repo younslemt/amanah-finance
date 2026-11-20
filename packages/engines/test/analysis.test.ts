@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  analyzeFinances, applyAdjustments, completeMonthsBefore, detectInternalTransfers, planGoal, proposeAllocation, recommend,
+  analyzeFinances, applyAdjustments, completeMonthsBefore, detectInternalTransfers, matchInternalTransfers, planGoal, proposeAllocation, recommend,
   scenarioBaseline, scenarioBudgetLines, seriesKey, simulateScenario, trackScenario,
   type AnalysisCategory, type AnalysisInput, type Goal, type Transaction,
 } from '../src/index.ts';
@@ -131,13 +131,106 @@ describe('Financial Analysis Engine — récurrences', () => {
     const r = analyzeFinances(base({ notRecurring: new Set([key]) }));
     expect(r.recurring.some((s) => s.key === key)).toBe(false);
   });
-  it('apparie les virements entre comptes propres seulement s’ils concordent', () => {
+  it('ne prend pour virement que des opérations neutres, proches et concordantes', () => {
     const ids = detectInternalTransfers([
-      t('2026-06-01', -10_000, 'A'), t('2026-06-02', 10_000, 'B', undefined, { accountId: 'epargne' }),
-      t('2026-06-01', -20_000, 'C'), t('2026-06-09', 20_000, 'D', undefined, { accountId: 'epargne' }),   // trop tard
-      t('2026-06-01', -30_000, 'E'), t('2026-06-01', 30_000, 'F'),                                         // même compte
-    ]);
+      t('2026-06-01', -10_000, 'VERS COMPTE EPARGNE'), t('2026-06-02', 10_000, 'DEPUIS COMPTE COURANT', undefined, { accountId: 'epargne' }),
+      t('2026-06-01', -20_000, 'VERS COMPTE EPARGNE'), t('2026-06-09', 20_000, 'DEPUIS COMPTE COURANT', undefined, { accountId: 'epargne' }), // trop tard
+      t('2026-06-01', -30_000, 'VERS COMPTE EPARGNE'), t('2026-06-01', 30_000, 'DEPUIS COMPTE COURANT'),                                 // même compte
+    ], new Map(CATS.map((c) => [c.slug, c])));
     expect(ids.size).toBe(2);
+  });
+});
+
+describe('Financial Analysis Engine — virements internes', () => {
+  const cats = new Map(CATS.map((c) => [c.slug, c]));
+  const accounts = [{ id: 'courant', type: 'current', balanceCents: 0, ibanLast4: '1111' }, { id: 'epargne', type: 'savings', balanceCents: 0, ibanLast4: '2222' }];
+  it('confirme un vrai virement : libellés de virement des deux côtés', () => {
+    const [m] = matchInternalTransfers([t('2026-06-25', -50_000, 'VERS COMPTE EPARGNE'), t('2026-06-26', 50_000, 'DEPUIS COMPTE COURANT', undefined, { accountId: 'epargne' })], cats);
+    expect(m).toMatchObject({ status: 'confirmed', score: 2, reasons: ['transfer_label'] });
+  });
+  it('confirme un vrai virement : IBAN de la contrepartie = compte du foyer', () => {
+    const [m] = matchInternalTransfers([
+      t('2026-06-25', -50_000, 'VIREMENT', undefined, { counterpartyIbanLast4: '2222', counterpartyName: undefined }),
+      t('2026-06-25', 50_000, 'VIREMENT', undefined, { accountId: 'epargne', counterpartyName: undefined }),
+    ], cats, accounts);
+    expect(m.status).toBe('confirmed');
+    expect(m.reasons).toEqual(['iban_match', 'same_day']);
+  });
+  it('confirme un virement catégorisé comme transfert', () => {
+    const [m] = matchInternalTransfers([t('2026-06-25', -50_000, 'ORDRE PERMANENT', 'epargne'), t('2026-06-27', 50_000, 'VERSEMENT RECU', undefined, { accountId: 'epargne' })], cats);
+    expect(m).toMatchObject({ status: 'confirmed', reasons: ['transfer_category'] });
+  });
+  it('montant identique sans preuve : incertain, et les opérations restent comptées', () => {
+    const txs = [...household(), t('2026-08-12', -7_500, 'ACHAT EN LIGNE FICTIF'), t('2026-08-13', 7_500, 'VIREMENT DE MARIE FICTIVE', undefined, { accountId: 'epargne' })];
+    const a = analyzeFinances(base({ transactions: txs }));
+    const m = a.transfers.find((x) => x.amountCents === 7_500)!;
+    expect(m.status).toBe('uncertain');
+    expect(a.buckets[m.debitId]).not.toBe('transfer');
+    expect(a.buckets[m.creditId]).toBe('exceptional_income');
+  });
+  it('n’apparie jamais une dépense reconnue, un salaire, un remboursement ou des intérêts', () => {
+    const m = matchInternalTransfers([
+      t('2026-06-02', -95_000, 'LOYER', 'logement'), t('2026-06-02', 95_000, 'VIREMENT', undefined, { accountId: 'epargne' }),
+      t('2026-06-01', -280_000, 'VIREMENT', undefined), t('2026-06-01', 280_000, 'SALAIRE', 'salaire', { accountId: 'epargne' }),
+      t('2026-06-03', -4_000, 'VIREMENT', undefined), t('2026-06-03', 4_000, 'REMBOURSEMENT', 'alimentation', { accountId: 'epargne' }),
+      t('2026-06-30', -1_234, 'VIREMENT', undefined), t('2026-06-30', 1_234, 'INTERETS', 'interets', { accountId: 'epargne', isInterest: true }),
+    ], cats);
+    expect(m).toEqual([]);
+  });
+  it('plusieurs appariements possibles : incertain (ambigu)', () => {
+    const m = matchInternalTransfers([
+      t('2026-06-25', -10_000, 'VERS COMPTE EPARGNE'),
+      t('2026-06-25', 10_000, 'DEPUIS COMPTE COURANT', undefined, { accountId: 'epargne' }),
+      t('2026-06-26', 10_000, 'DEPUIS COMPTE COURANT', undefined, { accountId: 'livret' }),
+    ], cats);
+    expect(m).toHaveLength(1);
+    expect(m[0].status).toBe('uncertain');
+    expect(m[0].reasons).toContain('ambiguous');
+  });
+  it('respecte la décision de l’utilisateur (confirmé ou rejeté)', () => {
+    const txs = [t('2026-08-12', -7_500, 'ACHAT EN LIGNE FICTIF'), t('2026-08-13', 7_500, 'VIREMENT DE MARIE FICTIVE', undefined, { accountId: 'epargne' })];
+    const key = `${txs[0].id}|${txs[1].id}`;
+    expect(matchInternalTransfers(txs, cats, [], new Map([[key, 'confirmed' as const]]))[0]).toMatchObject({ status: 'confirmed', reasons: ['user_confirmed'] });
+    expect(matchInternalTransfers(txs, cats, [], new Map([[key, 'rejected' as const]]))).toEqual([]);
+  });
+});
+
+describe('Financial Analysis Engine — couverture des données', () => {
+  it('historique complet : couverture complète', () => {
+    const a = analyzeFinances(base());
+    expect(a.coverage).toMatchObject({ status: 'complete', incompleteMonths: [], issues: [] });
+    expect(a.coverage.completeMonths).toEqual(MONTHS);
+  });
+  it('un mois sans aucune opération sur le compte courant est exclu des calculs', () => {
+    const a = analyzeFinances(base({ transactions: household().filter((x) => !(x.bookedOn.startsWith('2026-07') && x.accountId === 'courant')) }));
+    expect(a.coverage.incompleteMonths).toEqual(['2026-07']);
+    expect(a.coverage.status).toBe('partial');
+    expect(a.coverage.issues[0]).toMatchObject({ code: 'month_gap', accountId: 'courant', month: '2026-07' });
+    expect(a.monthsWithData).toBe(5);
+    expect(a.capacity.monthsUsed).toBe(5);
+    expect(a.months.find((m) => m.month === '2026-07')!.complete).toBe(false);
+  });
+  it('un relevé arrêté en milieu de mois rend ce mois incomplet', () => {
+    const a = analyzeFinances(base({ transactions: household().filter((x) => x.bookedOn < '2026-10-12' || x.accountId !== 'courant') }));
+    expect(a.coverage.incompleteMonths).toEqual(['2026-10']);
+    expect(a.coverage.issues.map((i) => i.code)).toEqual(['statement_stops_early']);
+  });
+  it('signale un compte courant sans opérations ou commencé plus tard, sans inventer de manque', () => {
+    const a = analyzeFinances(base({ accounts: [
+      { id: 'courant', type: 'current', balanceCents: 500_000 }, { id: 'carte', type: 'credit_card', balanceCents: -20_000 },
+      { id: 'epargne', type: 'savings', balanceCents: 300_000 },
+    ] }));
+    expect(a.coverage.status).toBe('partial');
+    expect(a.coverage.issues).toEqual([{ code: 'account_without_transactions', accountId: 'carte' }]);
+    expect(a.coverage.incompleteMonths).toEqual([]);
+    const later = analyzeFinances(base({ transactions: [...household(), t('2026-09-05', -3_000, 'ACHAT CARTE', 'divers', { accountId: 'carte' }), t('2026-10-30', -2_000, 'ACHAT CARTE', 'divers', { accountId: 'carte' })],
+      accounts: [{ id: 'courant', type: 'current', balanceCents: 0 }, { id: 'carte', type: 'credit_card', balanceCents: 0 }] }));
+    expect(later.coverage.issues).toContainEqual({ code: 'account_starts_later', accountId: 'carte', month: '2026-09' });
+  });
+  it('moins de 3 mois complets : couverture insuffisante, aucun chiffre', () => {
+    const a = analyzeFinances(base({ transactions: household().filter((x) => x.bookedOn < '2026-06-01' || x.bookedOn >= '2026-10-01') }));
+    expect(a.coverage.status).toBe('insufficient');
+    expect(a.capacity.estimatedCents).toBeNull();
   });
 });
 
@@ -180,18 +273,48 @@ describe('Budget Optimization Engine', () => {
   const a = analyzeFinances(base());
   const goal: Goal = { id: 'g1', kind: 'personal', name: 'Projet fictif', targetCents: 1_000_000, targetDate: '2030-01-01', monthlyCapacityCents: 50_000 };
 
-  it('simule −50 €/mois : situation, amélioration, impacts mensuel et annuel, objectifs', () => {
+  it('simule −50 €/mois : situation, amélioration, impacts mensuel et annuel', () => {
     const s = simulateScenario(a, [{ type: 'total', monthlyCents: 5_000 }], [{ goal, allocations: [] }]);
     expect(s.available).toBe(true);
     expect(s.current.capacityCents).toBe(150_401);
     expect(s.potentialMonthlyCents).toBe(5_000);
     expect(s.potentialAnnualCents).toBe(60_000);
     expect(s.after.capacityCents).toBe(155_401);
-    const g = s.goals[0];
+    // Capacité réellement disponible : estimée − déjà engagée sur les objectifs
+    expect(s.capacity).toEqual({ estimatedCents: 150_401, committedCents: 50_000, availableCents: 100_401, availableAfterCents: 105_401 });
+    // Simulation individuelle : alternative exclusive
+    const g = s.individual[0];
+    expect(g.exclusive).toBe(true);
     expect(g.before.projectedMonthsAtCurrentPace).toBe(20);
-    expect(g.after.projectedMonthsAtCurrentPace).toBe(19); // 1 000 000 / 55 000 → 19 mois
-    expect(g.monthsGained).toBe(1);
-    expect(s.reserve).toEqual({ gapCents: 129_000, monthsToTargetBefore: 1, monthsToTargetAfter: 1 });
+    expect(g.after.projectedMonthsAtCurrentPace).toBe(19);
+    expect(s.reserve).toEqual({ gapCents: 129_000, monthsToTargetBefore: 2, monthsToTargetAfter: 2 });
+  });
+  it('répartition globale : jamais de double allocation entre objectifs', () => {
+    const goals: Goal[] = [
+      { id: 'a', kind: 'personal', name: 'A', targetCents: 3_000_000, targetDate: '2027-11-01' },
+      { id: 'b', kind: 'children_education', name: 'B', targetCents: 3_000_000, targetDate: '2027-12-01' },
+      { id: 'c', kind: 'real_estate', name: 'C', targetCents: 3_000_000, targetDate: '2028-01-01' },
+    ];
+    const s = simulateScenario(a, [{ type: 'total', monthlyCents: 20_000 }], goals.map((goal) => ({ goal, allocations: [] })));
+    const sumBefore = s.allocation.lines.reduce((t, l) => t + l.extraBeforeCents, 0);
+    const sumAfter = s.allocation.lines.reduce((t, l) => t + l.extraAfterCents, 0);
+    expect(sumBefore).toBeLessThanOrEqual(Math.max(0, s.capacity.availableCents!));
+    expect(sumAfter).toBeLessThanOrEqual(Math.max(0, s.capacity.availableAfterCents!));
+    expect(sumAfter - sumBefore).toBeLessThanOrEqual(s.potentialMonthlyCents);
+    expect(sumAfter + s.allocation.unallocatedAfterCents).toBe(s.capacity.availableAfterCents);
+    // Les besoins dépassent la capacité : tout est affecté, à l'objectif le plus proche d'abord
+    expect(s.allocation.unallocatedAfterCents).toBe(0);
+    expect(s.allocation.lines[0].extraAfterCents).toBeGreaterThan(s.allocation.lines[2].extraAfterCents);
+    // Les simulations individuelles, elles, ne s'additionnent pas : chacune reçoit toute l'économie
+    expect(s.individual.every((g) => g.paceAfterCents - g.paceBeforeCents === s.potentialMonthlyCents)).toBe(true);
+  });
+  it('capacité déjà engagée : rien à répartir, l’économie reste disponible', () => {
+    const big: Goal = { id: 'g', kind: 'personal', name: 'G', targetCents: 100_000, targetDate: '2030-01-01', monthlyCapacityCents: 200_000 };
+    const s = simulateScenario(a, [{ type: 'total', monthlyCents: 5_000 }], [{ goal: big, allocations: [] }]);
+    expect(s.capacity.availableCents).toBe(-49_599);
+    expect(s.allocation.allocatedBeforeCents).toBe(0);
+    expect(s.allocation.allocatedAfterCents).toBe(0);
+    expect(s.reserve!.monthsToTargetBefore).toBeNull(); // aucune capacité disponible pour la réserve
   });
   it('ne modifie aucune donnée d’entrée', () => {
     const input = base();

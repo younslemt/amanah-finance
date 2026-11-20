@@ -150,3 +150,16 @@ export async function setAccountReserve(_prev: FormState, fd: FormData): Promise
   if (error) return dbError('account reserve', error);
   return done(value === 'yes' ? 'Compte compté dans votre réserve de précaution.' : 'Compte retiré de votre réserve de précaution.');
 }
+
+/** Rapprochement de virement : confirmé (virement entre comptes) ou rejeté (opérations distinctes). */
+export async function decideTransfer(_prev: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const debitId = String(fd.get('debitId') ?? ''), creditId = String(fd.get('creditId') ?? '');
+  const verdict = fd.get('verdict');
+  if (!uuid.test(debitId) || !uuid.test(creditId) || (verdict !== 'confirmed' && verdict !== 'rejected')) return formError('Décision invalide.');
+  const { error } = await ctx.supabase.from('transfer_decisions')
+    .upsert({ household_id: ctx.householdId, debit_id: debitId, credit_id: creditId, verdict }, { onConflict: 'household_id,debit_id,credit_id' });
+  if (error) return dbError('transfer decision', error);
+  return done(verdict === 'confirmed' ? 'Virement entre vos comptes confirmé : il n’est plus compté comme revenu ni comme dépense.' : 'Opérations distinctes : elles restent comptées normalement.');
+}

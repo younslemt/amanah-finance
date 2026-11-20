@@ -21,7 +21,7 @@ export function IncomeExpenseChart({ months, title = 'Revenus et dépenses' }: {
         {months.map((m, i) => {
           const cx = padL + slot * i + slot / 2;
           return (
-            <g key={m.month}>
+            <g key={m.month} opacity={m.complete ? 1 : 0.4}>
               <rect x={cx - bar - 2} y={y(m.totalIncomeCents)} width={bar} height={H - padB - y(m.totalIncomeCents)} rx="3" fill="var(--color-primary-700)" />
               <rect x={cx + 2} y={y(m.totalExpenseCents)} width={bar} height={H - padB - y(m.totalExpenseCents)} rx="3" fill="var(--color-accent-500)" />
               <text x={cx} y={H - 9} textAnchor="middle" fontSize="12" fill="var(--color-ink-muted)">{shortMonth(m.month)}</text>
@@ -32,6 +32,7 @@ export function IncomeExpenseChart({ months, title = 'Revenus et dépenses' }: {
       <figcaption className="mt-2 flex flex-wrap gap-4 text-xs text-ink-muted">
         <span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-sm bg-primary-700" />Revenus (hors intérêts)</span>
         <span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-sm bg-accent-500" />Dépenses (remboursements déduits)</span>
+        {months.some((m) => !m.complete) ? <span>Barres atténuées : mois incomplets, exclus des calculs</span> : null}
       </figcaption>
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer text-primary-700">Voir le tableau</summary>
@@ -47,7 +48,7 @@ export function IncomeExpenseChart({ months, title = 'Revenus et dépenses' }: {
             <tbody>
               {months.map((m) => (
                 <tr key={m.month} className="border-b border-line/60">
-                  <th scope="row" className="py-1.5 pr-3 text-left font-normal">{formatMonth(m.month)}</th>
+                  <th scope="row" className="py-1.5 pr-3 text-left font-normal">{formatMonth(m.month)}{m.complete ? '' : ' (incomplet, exclu des calculs)'}</th>
                   <td className="tabular py-1.5 pr-3 text-right">{formatCents(m.totalIncomeCents, { round: true })}</td>
                   <td className="tabular py-1.5 pr-3 text-right">{formatCents(m.totalExpenseCents, { round: true })}</td>
                   <td className={`tabular py-1.5 text-right ${m.netCents < 0 ? 'text-critical' : ''}`}>{formatCents(m.netCents, { round: true })}</td>

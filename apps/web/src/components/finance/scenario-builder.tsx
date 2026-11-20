@@ -137,23 +137,31 @@ export function ScenarioBuilder({ analysis, goals, candidates, initialCategory, 
                 <div><dt className="text-ink-muted">Impact annuel</dt><dd className="tabular text-lg font-semibold text-positive" data-testid="sim-annuel">+{formatCents(sim.potentialAnnualCents, { round: true })}</dd></div>
               </dl>
               <p className="mt-2 text-xs text-ink-muted">Économie simulée : elle ne sera réelle que si vos dépenses baissent effectivement. Vos opérations et votre budget ne sont pas modifiés.</p>
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm sm:grid-cols-4" data-testid="repartition-capacite">
+                <div><dt className="text-ink-muted">Capacité estimée</dt><dd className="tabular font-medium">{formatCents(sim.capacity.estimatedCents ?? 0, { round: true })}</dd></div>
+                <div><dt className="text-ink-muted">Déjà engagée sur vos projets</dt><dd className="tabular font-medium">{formatCents(sim.capacity.committedCents, { round: true })}</dd></div>
+                <div><dt className="text-ink-muted">Réellement disponible</dt><dd className={`tabular font-medium ${(sim.capacity.availableCents ?? 0) < 0 ? 'text-critical' : ''}`} data-testid="dispo-avant">{formatCents(sim.capacity.availableCents ?? 0, { round: true })}</dd></div>
+                <div><dt className="text-ink-muted">Disponible après scénario</dt><dd className="tabular font-medium" data-testid="dispo-apres">{formatCents(sim.capacity.availableAfterCents ?? 0, { round: true })}</dd></div>
+              </dl>
               {sim.reserve && sim.reserve.gapCents > 0 ? (
-                <p className="mt-2 text-sm">Réserve de précaution : objectif atteint en {sim.reserve.monthsToTargetBefore ?? '—'} mois aujourd’hui, {sim.reserve.monthsToTargetAfter ?? '—'} mois avec ce scénario (si la capacité y était entièrement consacrée).</p>
+                <p className="mt-2 text-sm">Réserve de précaution : objectif atteint en {sim.reserve.monthsToTargetBefore ?? '—'} mois aujourd’hui, {sim.reserve.monthsToTargetAfter ?? '—'} mois avec ce scénario (si la capacité disponible y était entièrement consacrée).</p>
               ) : null}
-              {sim.goals.length ? (
+              {sim.allocation.lines.length ? (
                 <div className="mt-3 overflow-x-auto">
-                  <table className="w-full min-w-[460px] text-sm" data-testid="incidence-objectifs">
-                    <caption className="mb-1 text-left font-medium">Incidence sur vos projets (si l’économie leur est affectée)</caption>
+                  <table className="w-full min-w-[520px] text-sm" data-testid="incidence-objectifs">
+                    <caption className="mb-1 text-left font-medium">Répartition globale de la capacité disponible entre vos projets</caption>
                     <thead><tr className="border-b border-line text-left text-ink-muted">
                       <th scope="col" className="py-1.5 pr-3 font-medium">Projet</th>
-                      <th scope="col" className="py-1.5 pr-3 font-medium">Date projetée actuelle</th>
+                      <th scope="col" className="py-1.5 pr-3 text-right font-medium">Complément / mois</th>
+                      <th scope="col" className="py-1.5 pr-3 font-medium">Date projetée sans scénario</th>
                       <th scope="col" className="py-1.5 pr-3 font-medium">Avec le scénario</th>
                       <th scope="col" className="py-1.5 font-medium">Gain</th>
                     </tr></thead>
                     <tbody>
-                      {sim.goals.map((g) => (
+                      {sim.allocation.lines.map((g) => (
                         <tr key={g.goalId} className="border-b border-line/60">
                           <th scope="row" className="py-1.5 pr-3 text-left font-normal">{g.name}</th>
+                          <td className="tabular py-1.5 pr-3 text-right">{formatCents(g.extraBeforeCents, { round: true })} → {formatCents(g.extraAfterCents, { round: true })}</td>
                           <td className="py-1.5 pr-3">{g.before.projectedCompletionDate ? formatDate(g.before.projectedCompletionDate) : 'Rythme à déterminer'}</td>
                           <td className="py-1.5 pr-3">{g.after.projectedCompletionDate ? formatDate(g.after.projectedCompletionDate) : '—'}</td>
                           <td className="py-1.5">{g.monthsGained === null ? '—' : `${g.monthsGained} mois`}</td>
@@ -161,7 +169,19 @@ export function ScenarioBuilder({ analysis, goals, candidates, initialCategory, 
                       ))}
                     </tbody>
                   </table>
+                  <p className="mt-1 text-xs text-ink-muted">Chaque euro n’est affecté qu’une fois : projets en retard d’abord, puis par échéance, jusqu’à ce qu’il leur manque. Non affecté après scénario : {formatCents(sim.allocation.unallocatedAfterCents, { round: true })} / mois.</p>
                 </div>
+              ) : null}
+              {sim.individual.length && sim.potentialMonthlyCents > 0 ? (
+                <details className="mt-3 text-sm">
+                  <summary className="cursor-pointer text-primary-700">Simulations individuelles (alternatives, non cumulables)</summary>
+                  <ul className="mt-2 space-y-1" data-testid="simulations-individuelles">
+                    {sim.individual.map((g) => (
+                      <li key={g.goalId}>Si toute l’économie allait à « {g.name} » : {g.after.projectedCompletionDate ? formatDate(g.after.projectedCompletionDate) : '—'}{g.monthsGained !== null ? ` (${g.monthsGained} mois gagnés)` : ''}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-ink-muted">Chaque ligne suppose que la totalité de l’économie va à ce seul projet : ces gains ne s’additionnent pas.</p>
+                </details>
               ) : null}
             </>
           )}

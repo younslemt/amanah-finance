@@ -10,6 +10,15 @@ import {
  * Sprint 3 en mode réel, mobile et ordinateur : analyse, optimisation, recommandations,
  * tableau de bord. Relevé FICTIF généré pour les 6 mois complets précédant aujourd'hui.
  */
+function savingsStatement(): string {
+  const d = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 13));
+  const date = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+  const dir = mkdtempSync(join(tmpdir(), 'amanah-s3e-'));
+  const file = join(dir, 'releve-fictif-epargne.csv');
+  writeFileSync(file, `Date;Montant;Libellé;Contrepartie;Compte contrepartie;Devise\n${date};75,00;VERSEMENT RECU;Marie Fictive;;EUR\n`, 'utf8');
+  return file;
+}
+
 function fictitiousStatement(): string {
   const today = new Date();
   const lines = ['Date;Montant;Libellé;Contrepartie;Compte contrepartie;Devise'];
@@ -29,7 +38,11 @@ function fictitiousStatement(): string {
       `${fmt(y, m, 20)};${amt(-16_000)};COLRUYT FICTIF;Colruyt Fictif;;EUR`,
       `${fmt(y, m, 15)};${amt(-(4_000 + k * 1_500))};RESTAURANT FICTIF ${k};Restaurant Fictif ${k};;EUR`,
     );
+    // Dernier mois complet : un paiement de même montant qu'un versement reçu sur l'épargne (rapprochement incertain)
+    if (i === 1) lines.push(`${fmt(y, m, 12)};${amt(-7_500)};PAIEMENT FICTIF EN LIGNE;Boutique Fictive;;EUR`);
   }
+  // Mois en cours : le relevé continue au-delà des mois complets (couverture complète)
+  lines.push(`${fmt(today.getUTCFullYear(), today.getUTCMonth(), 1)};${amt(280_000)};VIREMENT SALAIRE EMPLOYEUR FICTIF;Employeur Fictif SA;;EUR`);
   const dir = mkdtempSync(join(tmpdir(), 'amanah-s3-'));
   const file = join(dir, 'releve-fictif-6-mois.csv');
   writeFileSync(file, `${lines.join('\n')}\n`, 'utf8');
@@ -71,8 +84,8 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await page.getByLabel('Compte concerné').selectOption({ label: 'Compte courant fictif' });
     await page.getByLabel('Relevé CSV').setInputFiles(fictitiousStatement());
     await page.getByRole('button', { name: 'Prévisualiser' }).click();
-    await page.getByTestId('form-confirmer-import').getByRole('button', { name: /Importer 48 opération/ }).click();
-    await expect(page.getByTestId('resultat-import')).toContainText('48 opération(s) importée(s)');
+    await page.getByTestId('form-confirmer-import').getByRole('button', { name: /Importer 50 opération/ }).click();
+    await expect(page.getByTestId('resultat-import')).toContainText('50 opération(s) importée(s)');
 
     await page.goto('/dashboard');
     await expect(page.getByTestId('synthese')).toContainText('Sur vos 6 derniers mois complets');
@@ -90,6 +103,25 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await expect(rec).toContainText('Proprietaire Fictif');
     await expect(rec).toContainText('Charge fixe');
     await expect(rec).not.toContainText('Restaurant Fictif');
+    await expect(page.getByTestId('couverture')).toHaveAttribute('data-status', 'complete');
+    await expect(page.getByTestId('virements-a-confirmer')).toHaveCount(0);
+  });
+
+  test('virement incertain : signalé, compté normalement, puis confirmé par l’utilisateur', async ({ page }) => {
+    await signIn(page, E);
+    await page.goto('/import');
+    await page.getByLabel('Compte concerné').selectOption({ label: 'Épargne fictive' });
+    await page.getByLabel('Relevé CSV').setInputFiles(savingsStatement());
+    await page.getByRole('button', { name: 'Prévisualiser' }).click();
+    await page.getByTestId('form-confirmer-import').getByRole('button', { name: /Importer 1 opération/ }).click();
+    await page.goto('/budget');
+    const pending = page.getByTestId('virements-a-confirmer');
+    await expect(pending).toContainText(euros('75,00 €'));
+    await expect(pending).toContainText('PAIEMENT FICTIF EN LIGNE');
+    await pending.getByTestId('virement-confirmed').getByRole('button').click();
+    await expect(page.getByTestId('virements-a-confirmer')).toHaveCount(0);
+    const decisions = (await (await rest(await apiToken(E), 'transfer_decisions?select=verdict')).json()) as Array<{ verdict: string }>;
+    expect(decisions).toEqual([{ verdict: 'confirmed' }]);
   });
 
   test('optimiser : simuler sans rien écrire, puis décider et suivre', async ({ page }) => {
@@ -158,7 +190,7 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await completeOnboarding(page, F.name);
     const tokenE = await apiToken(E);
     const tokenF = await apiToken(F);
-    for (const table of ['budget_scenarios', 'recommendation_feedback', 'household_category_settings', 'recurring_feedback', 'budgets']) {
+    for (const table of ['budget_scenarios', 'recommendation_feedback', 'household_category_settings', 'recurring_feedback', 'budgets', 'transfer_decisions']) {
       expect((await (await rest(tokenF, `${table}?select=*`)).json()) as unknown[], table).toEqual([]);
     }
     const [hE] = (await (await rest(tokenE, 'households?select=id')).json()) as Array<{ id: string }>;

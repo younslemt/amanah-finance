@@ -11,7 +11,7 @@
 import type { Cents } from './money.ts';
 import { divRoundHalfEven } from './money.ts';
 import type { FinancialAnalysis } from './analysis.ts';
-import { proposeAllocation } from './optimization.ts';
+import { allocateShortfalls } from './optimization.ts';
 import type { Goal, GoalPlan } from './goals.ts';
 
 export type RuleId = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6';
@@ -93,14 +93,15 @@ export function recommend({ analysis, goals, hidden = new Set() }: Recommendatio
     }];
   }
   const cap = a.capacity;
+  const months = a.months.filter((m) => m.complete);
 
   // R1 — dépenses supérieures aux revenus
-  const last3 = a.months.slice(-3);
+  const last3 = months.slice(-3);
   const deficitMonths = last3.filter((m) => m.netCents < 0).length;
   if (cap.observedCents !== null && cap.observedCents < 0 && deficitMonths >= RECOMMENDATION_RULES.deficitMonths) {
     const deficit = -cap.observedCents;
-    const top = [...new Set(a.months.flatMap((m) => Object.keys(m.categories)))]
-      .map((s) => ({ s, v: a.months.map((m) => m.categories[s] ?? 0).sort((x, y) => x - y)[Math.floor(a.months.length / 2)] }))
+    const top = [...new Set(months.flatMap((m) => Object.keys(m.categories)))]
+      .map((s) => ({ s, v: months.map((m) => m.categories[s] ?? 0).sort((x, y) => x - y)[Math.floor(months.length / 2)] }))
       .sort((x, y) => y.v - x.v)[0];
     out.push({
       ruleId: 'R1', fingerprint: `R1:${bucket(deficit)}`, severity: 'critical', subject: null,
@@ -161,7 +162,8 @@ export function recommend({ analysis, goals, hidden = new Set() }: Recommendatio
     const committed = goals.filter((g) => g.plan.status !== 'achieved').reduce((s, g) => s + (g.goal.monthlyCapacityCents ?? g.paceCents ?? 0), 0);
     const free = cap.estimatedCents - committed;
     if (free >= RECOMMENDATION_RULES.unallocatedMinCents) {
-      const proposal = proposeAllocation(free, goals.filter((g) => (g.goal.monthlyCapacityCents ?? g.paceCents ?? 0) < g.plan.monthlyRequiredCents));
+      // Répartition sans double allocation : chaque objectif reçoit au plus ce qui lui manque
+      const proposal = allocateShortfalls(free, goals.map((g) => ({ ...g, paceCents: g.goal.monthlyCapacityCents ?? g.paceCents ?? 0 })));
       const allocated = free - proposal.unallocatedCents;
       out.push({
         ruleId: 'R4', fingerprint: `R4:${bucket(free)}`, severity: 'medium', subject: null,

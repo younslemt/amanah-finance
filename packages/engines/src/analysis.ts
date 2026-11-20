@@ -39,6 +39,8 @@ export interface AnalysisAccount {
   balanceCents: Cents;
   /** Choix de l'utilisateur ; absent = comptes d'épargne et d'épargne réglementée. */
   countsAsReserve?: boolean | null;
+  /** 4 derniers caractères de l'IBAN du compte (preuve de virement interne). */
+  ibanLast4?: string;
 }
 
 export interface AnalysisInput {
@@ -51,6 +53,8 @@ export interface AnalysisInput {
   natureOverrides?: Readonly<Record<string, CategoryNature>>;
   /** Séries écartées par l'utilisateur (« ce n'est pas une dépense récurrente »). */
   notRecurring?: ReadonlySet<string>;
+  /** Décisions de l'utilisateur sur des rapprochements de virements (clé « débit|crédit »). */
+  transferDecisions?: ReadonlyMap<string, 'confirmed' | 'rejected'>;
   /** Mois analysés (mois complets précédant la date d'analyse). */
   months?: number;
   /** Réserve cible en mois de dépenses essentielles. */
@@ -80,6 +84,15 @@ export const ANALYSIS_RULES = {
   exceptionalMultiple: 3,
   /** Virement entre ses propres comptes : même montant, sens opposés, comptes différents, ≤ 3 jours. */
   internalTransferMaxDays: 3,
+  /** Score de preuve nécessaire pour un rapprochement « confirmé » (sinon « incertain »). */
+  internalTransferMinScore: 2,
+  /** Libellés évoquant un virement entre ses propres comptes (normalisés). */
+  internalTransferMarkers: ['EPARGNE', 'SPAARREKENING', 'SPAREN', 'VERS COMPTE', 'DEPUIS COMPTE', 'VERS MON COMPTE', 'EIGEN REKENING',
+    'TRANSFERT', 'VIREMENT INTERNE', 'PROPRE COMPTE', 'OWN ACCOUNT'] as readonly string[],
+  /** Un relevé qui s'arrête plus de 10 jours avant la fin d'un mois rend ce mois incomplet. */
+  statementEndToleranceDays: 10,
+  /** Comptes dont on attend une activité chaque mois (contrôle de couverture). */
+  monitoredAccountTypes: ['current', 'credit_card'] as readonly string[],
   /** Mois complets nécessaires pour chiffrer une capacité d'épargne. */
   minMonthsForCapacity: 3,
 } as const;
@@ -88,6 +101,40 @@ export type Bucket =
   | 'skipped_currency' | 'transfer' | 'interest' | 'refund'
   | 'regular_income' | 'exceptional_income'
   | 'fixed_expense' | 'variable_expense' | 'exceptional_expense';
+
+export type TransferReason = 'user_confirmed' | 'transfer_category' | 'iban_match' | 'transfer_label' | 'same_day' | 'ambiguous';
+
+export interface TransferMatch {
+  /** Clé stable « débit|crédit » (décision de l'utilisateur). */
+  key: string;
+  debitId: string;
+  creditId: string;
+  debitAccountId: string;
+  creditAccountId: string;
+  amountCents: Cents; // positif
+  debitDate: IsoDate;
+  creditDate: IsoDate;
+  /** confirmed : traité comme virement interne ; uncertain : compté normalement, confirmation demandée. */
+  status: 'confirmed' | 'uncertain';
+  score: number;
+  reasons: TransferReason[];
+}
+
+export type CoverageIssueCode =
+  | 'account_without_transactions' | 'account_starts_later' | 'month_gap' | 'statement_stops_early' | 'account_stops_early';
+
+export interface CoverageIssue { code: CoverageIssueCode; accountId: string; month?: string }
+
+export interface DataCoverage {
+  /** complete : aucun manque détecté ; partial : manques signalés ; insufficient : moins de 3 mois complets. */
+  status: 'complete' | 'partial' | 'insufficient';
+  /** Mois couverts et complets, utilisés pour les calculs. */
+  completeMonths: string[];
+  /** Mois couverts mais incomplets (exclus des calculs). */
+  incompleteMonths: string[];
+  accounts: Array<{ accountId: string; type: string | null; monitored: boolean; firstDate: IsoDate | null; lastDate: IsoDate | null; transactionCount: number }>;
+  issues: CoverageIssue[];
+}
 
 export type RecurringKind = 'income' | 'fixed_charge' | 'subscription' | 'recurring_expense';
 
@@ -111,6 +158,8 @@ export interface RecurringSeries {
 
 export interface MonthAnalysis {
   month: string;
+  /** Mois sans manque détecté ; les mois incomplets sont affichés mais exclus des calculs. */
+  complete: boolean;
   regularIncomeCents: Cents;
   exceptionalIncomeCents: Cents;
   interestCents: Cents;
@@ -161,9 +210,13 @@ export interface ReserveStatus extends EmergencyFundPlan {
 
 export interface FinancialAnalysis {
   asOf: IsoDate;
-  /** Mois complets analysés, du plus ancien au plus récent (uniquement ceux couverts par les données). */
+  /** Mois couverts par les données, du plus ancien au plus récent (complets ou non, voir `complete`). */
   months: MonthAnalysis[];
+  /** Nombre de mois COMPLETS, base de tous les calculs. */
   monthsWithData: number;
+  coverage: DataCoverage;
+  /** Rapprochements de virements entre comptes du foyer. */
+  transfers: TransferMatch[];
   reliability: Reliability;
   capacity: SavingsCapacity;
   recurring: RecurringSeries[];
@@ -210,20 +263,144 @@ export function seriesKey(tx: Pick<Transaction, 'description' | 'counterpartyNam
 // ---------------------------------------------------------------------------
 // Virements entre ses propres comptes
 // ---------------------------------------------------------------------------
-/** Paires débit/crédit de même montant entre deux comptes différents à 3 jours au plus. */
-export function detectInternalTransfers(transactions: readonly Transaction[]): Set<string> {
-  const ids = new Set<string>();
-  const credits = transactions.filter((t) => t.amountCents > 0);
-  const used = new Set<string>();
-  const debits = transactions.filter((t) => t.amountCents < 0).sort((a, b) => (a.bookedOn < b.bookedOn ? -1 : a.bookedOn > b.bookedOn ? 1 : a.id < b.id ? -1 : 1));
+const FALLBACK_SLUGS = new Set(['divers', 'autres_revenus']);
+
+/** Une opération peut-elle être une jambe de virement interne ? (catégorie neutre ou de transfert) */
+function transferEligible(t: Transaction, cats: ReadonlyMap<string, AnalysisCategory>): boolean {
+  if (t.isInterest) return false;
+  const cat = t.categorySlug ? cats.get(t.categorySlug) : undefined;
+  if (!cat) return true;
+  if (cat.kind === 'transfer') return true;
+  if (cat.isInterest) return false;
+  // Une catégorie reconnue (salaire, loyer, alimentation…) ou un remboursement exclut le virement
+  return FALLBACK_SLUGS.has(cat.slug) && ((t.amountCents < 0 && cat.kind === 'expense') || (t.amountCents > 0 && cat.kind === 'income'));
+}
+
+const hasMarker = (t: Transaction) => {
+  const label = normalizeLabel(`${t.description} ${t.counterpartyName ?? ''}`);
+  return ANALYSIS_RULES.internalTransferMarkers.some((m) => label.includes(m));
+};
+
+/**
+ * Rapproche les virements entre comptes du foyer.
+ *
+ * Candidats : montants opposés égaux, même devise, comptes différents, 3 jours au plus,
+ * opérations de catégorie neutre ou de transfert. Preuves (score) : catégorie de
+ * transfert (+2), IBAN de la contrepartie = compte du foyer (+2), libellé de virement
+ * interne (+1 par côté), même jour (+1).
+ * - confirmé : score ≥ 2 et appariement univoque, ou confirmation de l'utilisateur ;
+ * - incertain : sinon (ou plusieurs appariements possibles). Un rapprochement incertain
+ *   n'est PAS neutralisé : les deux opérations restent comptées, l'utilisateur tranche.
+ * Les rapprochements rejetés par l'utilisateur sont ignorés.
+ */
+export function matchInternalTransfers(
+  transactions: readonly Transaction[],
+  categories: ReadonlyMap<string, AnalysisCategory> = new Map(),
+  accounts: readonly AnalysisAccount[] = [],
+  decisions: ReadonlyMap<string, 'confirmed' | 'rejected'> = new Map(),
+): TransferMatch[] {
+  const iban = new Map(accounts.filter((a) => a.ibanLast4).map((a) => [a.id, a.ibanLast4!.toUpperCase()]));
+  const byDate = (a: Transaction, b: Transaction) => (a.bookedOn < b.bookedOn ? -1 : a.bookedOn > b.bookedOn ? 1 : a.id < b.id ? -1 : 1);
+  const debits = transactions.filter((t) => t.amountCents < 0 && transferEligible(t, categories)).sort(byDate);
+  const credits = transactions.filter((t) => t.amountCents > 0 && transferEligible(t, categories)).sort(byDate);
+  const keyOf = (d: Transaction, c: Transaction) => `${d.id}|${c.id}`;
+  const edges = new Map<string, Transaction[]>();
+  const reverse = new Map<string, number>();
   for (const d of debits) {
-    const match = credits
-      .filter((c) => !used.has(c.id) && c.accountId !== d.accountId && c.amountCents === -d.amountCents && c.currency === d.currency
-        && Math.abs(daysBetween(d.bookedOn, c.bookedOn)) <= ANALYSIS_RULES.internalTransferMaxDays)
-      .sort((a, b) => Math.abs(daysBetween(d.bookedOn, a.bookedOn)) - Math.abs(daysBetween(d.bookedOn, b.bookedOn)) || (a.id < b.id ? -1 : 1))[0];
-    if (match) { used.add(match.id); ids.add(match.id); ids.add(d.id); }
+    const list = credits.filter((c) => c.accountId !== d.accountId && c.amountCents === -d.amountCents && c.currency === d.currency
+      && Math.abs(daysBetween(d.bookedOn, c.bookedOn)) <= ANALYSIS_RULES.internalTransferMaxDays
+      && decisions.get(keyOf(d, c)) !== 'rejected');
+    edges.set(d.id, list);
+    for (const c of list) reverse.set(c.id, (reverse.get(c.id) ?? 0) + 1);
+  }
+  const used = new Set<string>();
+  const out: TransferMatch[] = [];
+  for (const d of debits) {
+    const options = (edges.get(d.id) ?? []).filter((c) => !used.has(c.id));
+    if (options.length === 0) continue;
+    const confirmedByUser = options.find((c) => decisions.get(keyOf(d, c)) === 'confirmed');
+    const c = confirmedByUser ?? [...options].sort((x, y) => Math.abs(daysBetween(d.bookedOn, x.bookedOn)) - Math.abs(daysBetween(d.bookedOn, y.bookedOn)) || (x.id < y.id ? -1 : 1))[0];
+    used.add(c.id);
+    const reasons: TransferReason[] = [];
+    let score = 0;
+    const cd = d.categorySlug ? categories.get(d.categorySlug) : undefined;
+    const cc = c.categorySlug ? categories.get(c.categorySlug) : undefined;
+    if (cd?.kind === 'transfer' || cc?.kind === 'transfer') { score += 2; reasons.push('transfer_category'); }
+    const ibanMatch = (d.counterpartyIbanLast4 && iban.get(c.accountId) === d.counterpartyIbanLast4.toUpperCase())
+      || (c.counterpartyIbanLast4 && iban.get(d.accountId) === c.counterpartyIbanLast4.toUpperCase());
+    if (ibanMatch) { score += 2; reasons.push('iban_match'); }
+    const labels = Number(hasMarker(d)) + Number(hasMarker(c));
+    if (labels) { score += labels; reasons.push('transfer_label'); }
+    if (d.bookedOn === c.bookedOn) { score += 1; reasons.push('same_day'); }
+    const ambiguous = (edges.get(d.id) ?? []).length > 1 || (reverse.get(c.id) ?? 0) > 1;
+    if (ambiguous) reasons.push('ambiguous');
+    if (confirmedByUser) reasons.unshift('user_confirmed');
+    out.push({
+      key: keyOf(d, c), debitId: d.id, creditId: c.id, debitAccountId: d.accountId, creditAccountId: c.accountId,
+      amountCents: c.amountCents, debitDate: d.bookedOn, creditDate: c.bookedOn, score, reasons,
+      status: confirmedByUser || (!ambiguous && score >= ANALYSIS_RULES.internalTransferMinScore) ? 'confirmed' : 'uncertain',
+    });
+  }
+  return out;
+}
+
+/** Identifiants des opérations rapprochées et CONFIRMÉES comme virements internes. */
+export function detectInternalTransfers(
+  transactions: readonly Transaction[], categories?: ReadonlyMap<string, AnalysisCategory>,
+  accounts?: readonly AnalysisAccount[], decisions?: ReadonlyMap<string, 'confirmed' | 'rejected'>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const m of matchInternalTransfers(transactions, categories, accounts, decisions)) {
+    if (m.status === 'confirmed') { ids.add(m.debitId); ids.add(m.creditId); }
   }
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Couverture des données
+// ---------------------------------------------------------------------------
+function lastDayOfMonth(month: string): number {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/**
+ * Détermine les mois réellement complets. Pour chaque compte suivi (courant, carte) :
+ * - un mois sans aucune opération entre la première et la dernière opération du compte = trou ;
+ * - un relevé qui s'arrête plus de 10 jours avant la fin du mois rend ce mois incomplet ;
+ * - un compte qui s'arrête avant la fin de la période rend les mois suivants incomplets.
+ * Un compte sans aucune opération, ou dont l'historique commence plus tard, est signalé
+ * (couverture partielle) sans invalider les mois : son existence passée n'est pas connue.
+ */
+export function assessCoverage(
+  covered: readonly string[], transactions: readonly Transaction[], accounts: readonly AnalysisAccount[] | undefined,
+): { incomplete: Map<string, CoverageIssue[]>; accounts: DataCoverage['accounts']; issues: CoverageIssue[] } {
+  const incomplete = new Map<string, CoverageIssue[]>();
+  const issues: CoverageIssue[] = [];
+  const flag = (month: string, issue: CoverageIssue) => { incomplete.set(month, [...(incomplete.get(month) ?? []), issue]); issues.push(issue); };
+  const ids = accounts ? accounts.map((a) => a.id) : [...new Set(transactions.map((t) => t.accountId))];
+  const typeOf = new Map((accounts ?? []).map((a) => [a.id, a.type]));
+  const rows: DataCoverage['accounts'] = [];
+  for (const id of ids) {
+    const txs = transactions.filter((t) => t.accountId === id).map((t) => t.bookedOn).sort();
+    const type = typeOf.get(id) ?? null;
+    const monitored = accounts !== undefined && type !== null && ANALYSIS_RULES.monitoredAccountTypes.includes(type);
+    const first = txs[0] ?? null;
+    const last = txs[txs.length - 1] ?? null;
+    rows.push({ accountId: id, type, monitored, firstDate: first, lastDate: last, transactionCount: txs.length });
+    if (!monitored || covered.length === 0) continue;
+    if (!first || !last) { issues.push({ code: 'account_without_transactions', accountId: id }); continue; }
+    const months = new Set(txs.map((d) => monthKey(d)));
+    const firstM = monthKey(first), lastM = monthKey(last);
+    if (firstM > covered[0]) issues.push({ code: 'account_starts_later', accountId: id, month: firstM });
+    for (const m of covered) {
+      if (m > firstM && m < lastM && !months.has(m)) flag(m, { code: 'month_gap', accountId: id, month: m });
+      else if (m === lastM && Number(last.slice(8, 10)) < lastDayOfMonth(m) - ANALYSIS_RULES.statementEndToleranceDays) {
+        flag(m, { code: 'statement_stops_early', accountId: id, month: m });
+      } else if (m > lastM) flag(m, { code: 'account_stops_early', accountId: id, month: m });
+    }
+  }
+  return { incomplete, accounts: rows, issues };
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +493,10 @@ export function analyzeFinances(input: AnalysisInput): FinancialAnalysis {
 
   const skipped = inWindow.filter((t) => t.currency !== currency);
   const txs = inWindow.filter((t) => t.currency === currency);
-  const internal = detectInternalTransfers(txs);
+  const transfers = matchInternalTransfers(txs, cats, input.accounts ?? [], input.transferDecisions);
+  const internal = new Set<string>();
+  for (const m of transfers) if (m.status === 'confirmed') { internal.add(m.debitId); internal.add(m.creditId); }
+  const cov = assessCoverage(covered, input.transactions.filter((t) => t.currency === currency), input.accounts);
   const recurring = detectRecurring(txs.filter((t) => !internal.has(t.id)), input.asOf, cats, input.notRecurring);
   const recurringOf = new Map<string, RecurringSeries>();
   for (const s of recurring) for (const id of s.transactionIds) recurringOf.set(id, s);
@@ -366,9 +546,9 @@ export function analyzeFinances(input: AnalysisInput): FinancialAnalysis {
     buckets[t.id] = b;
   }
 
-  const months: MonthAnalysis[] = covered.map((month) => {
+  const allMonths: MonthAnalysis[] = covered.map((month) => {
     const r: MonthAnalysis = {
-      month, regularIncomeCents: 0, exceptionalIncomeCents: 0, interestCents: 0, refundCents: 0, transferCents: 0,
+      month, complete: !cov.incomplete.has(month), regularIncomeCents: 0, exceptionalIncomeCents: 0, interestCents: 0, refundCents: 0, transferCents: 0,
       fixedExpenseCents: 0, variableExpenseCents: 0, exceptionalExpenseCents: 0, essentialExpenseCents: 0,
       totalIncomeCents: 0, totalExpenseCents: 0, netCents: 0, categories: {},
     };
@@ -405,6 +585,16 @@ export function analyzeFinances(input: AnalysisInput): FinancialAnalysis {
     r.netCents = r.totalIncomeCents - r.totalExpenseCents;
     return r;
   });
+
+  // Seuls les mois complets servent aux calculs (les mois incomplets restent affichés)
+  const months = allMonths.filter((m) => m.complete);
+  const coverage: DataCoverage = {
+    status: months.length < ANALYSIS_RULES.minMonthsForCapacity ? 'insufficient' : cov.issues.length ? 'partial' : 'complete',
+    completeMonths: months.map((m) => m.month),
+    incompleteMonths: allMonths.filter((m) => !m.complete).map((m) => m.month),
+    accounts: cov.accounts,
+    issues: cov.issues,
+  };
 
   // Capacité d'épargne
   const n = months.length;
@@ -469,7 +659,7 @@ export function analyzeFinances(input: AnalysisInput): FinancialAnalysis {
   }
 
   return {
-    asOf: input.asOf, months, monthsWithData: n, reliability, capacity, recurring, variance, concentration, reserve,
+    asOf: input.asOf, months: allMonths, monthsWithData: n, coverage, transfers, reliability, capacity, recurring, variance, concentration, reserve,
     buckets, skippedForeignCurrency: skipped.length,
   };
 }

@@ -21,6 +21,12 @@ insert into public.accounts (household_id, name) values (current_setting('t.hs')
 insert into public.transactions (household_id, account_id, booked_on, amount_cents, description, source, dedupe_hash, category_slug)
 select current_setting('t.hs')::uuid, a.id, date '2026-10-08', -9000, 'SUPERMARCHE FICTIF', 'manual', 's-1', 'alimentation'
 from public.accounts a where a.household_id = current_setting('t.hs')::uuid;
+insert into public.accounts (household_id, name, type) values (current_setting('t.hs')::uuid, 'Épargne fictive de Sami', 'savings');
+insert into public.transactions (household_id, account_id, booked_on, amount_cents, description, source, dedupe_hash)
+select current_setting('t.hs')::uuid, a.id, date '2026-10-09', 9000, 'VERSEMENT RECU', 'manual', 's-2'
+from public.accounts a where a.name = 'Épargne fictive de Sami';
+select set_config('t.d1', (select id::text from public.transactions where dedupe_hash = 's-1'), false);
+select set_config('t.c1', (select id::text from public.transactions where dedupe_hash = 's-2'), false);
 
 create or replace function pg_temp.expect(name text, stmt text, should_pass boolean) returns void language plpgsql as $$
 begin
@@ -84,7 +90,13 @@ select pg_temp.expect('plafond négatif refusé', format($q$
 select pg_temp.expect('mois invalide refusé', format($q$
   select public.apply_budget_lines(%L, date '2026-11-15', '[{"category_slug":"loisirs","limit_cents":1}]'::jsonb)$q$, current_setting('t.hs')), false);
 select pg_temp.check_val('opérations bancaires jamais modifiées',
-  $q$select count(*) || '/' || sum(amount_cents) from public.transactions$q$, '1/-9000');
+  $q$select count(*) || '/' || sum(amount_cents) from public.transactions$q$, '2/0');
+select pg_temp.expect('virement incertain confirmé par le foyer', format($q$
+  insert into public.transfer_decisions (household_id, debit_id, credit_id, verdict) values (%L, %L, %L, 'confirmed')$q$,
+  current_setting('t.hs'), current_setting('t.d1'), current_setting('t.c1')), true);
+select pg_temp.expect('décision de virement : verdict inconnu refusé', format($q$
+  insert into public.transfer_decisions (household_id, debit_id, credit_id, verdict) values (%L, %L, %L, 'peut-être')$q$,
+  current_setting('t.hs'), current_setting('t.c1'), current_setting('t.d1')), false);
 
 select pg_temp.expect('série écartée par le foyer', format($q$
   insert into public.recurring_feedback (household_id, series_key) values (%L, 'D:STREAMING FICTIF')$q$, current_setting('t.hs')), true);
@@ -102,8 +114,8 @@ select pg_temp.expect('réserve : compte marqué par l''utilisateur',
 -- Tina, membre du même foyer
 -- ---------------------------------------------------------------------------
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000e2';
-select pg_temp.check_val('Tina : scénarios, natures et séries du foyer visibles',
-  $q$select (select count(*) from public.budget_scenarios) || '/' || (select count(*) from public.household_category_settings) || '/' || (select count(*) from public.recurring_feedback)$q$, '1/1/1');
+select pg_temp.check_val('Tina : scénarios, natures, séries et virements du foyer visibles',
+  $q$select (select count(*) from public.budget_scenarios) || '/' || (select count(*) from public.household_category_settings) || '/' || (select count(*) from public.recurring_feedback) || '/' || (select count(*) from public.transfer_decisions)$q$, '1/1/1/1');
 select pg_temp.check_val('Tina : décisions de Sami invisibles',
   $q$select count(*)::text from public.recommendation_feedback$q$, '0');
 select pg_temp.expect('Tina : décision personnelle', format($q$
@@ -127,6 +139,11 @@ select pg_temp.expect('autre foyer : marquer le scénario de Sami via son propre
   current_setting('t.hu'), current_setting('t.sc')), false);
 select pg_temp.check_val('échec : aucun plafond écrit chez Ugo',
   $q$select count(*)::text from public.budgets$q$, '0');
+select pg_temp.check_val('autre foyer : décisions de virement invisibles',
+  $q$select count(*)::text from public.transfer_decisions$q$, '0');
+select pg_temp.expect('autre foyer : décision sur les opérations de Sami via son propre foyer refusée', format($q$
+  insert into public.transfer_decisions (household_id, debit_id, credit_id, verdict) values (%L, %L, %L, 'rejected')$q$,
+  current_setting('t.hu'), current_setting('t.d1'), current_setting('t.c1')), false);
 select pg_temp.expect('autre foyer : scénario chez Sami refusé', format($q$
   insert into public.budget_scenarios (household_id, name, adjustments, baseline) values (%L, 'x', '[{"type":"total","monthlyCents":1}]', '{}')$q$,
   current_setting('t.hs')), false);
