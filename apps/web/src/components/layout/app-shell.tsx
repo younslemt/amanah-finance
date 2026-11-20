@@ -6,13 +6,16 @@ import { cn, LogoMark } from '@/components/ui';
 import { fr } from '@/messages/fr';
 import { brand } from '@/config/brand';
 
+/**
+ * Sprint 3 : cinq entrées, gestion financière d'abord. Zakat, purification et dons sont
+ * regroupés dans l'espace Finance islamique (ouvert après consentement).
+ */
 const NAV = [
-  { href: '/dashboard', label: fr.nav.dashboard, icon: 'M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z' },
-  { href: '/budget', label: fr.nav.budget, icon: 'M4 19V9m6 10V5m6 14v-7m4 7H2' },
-  { href: '/goals', label: fr.nav.goals, icon: 'M12 21a9 9 0 110-18 9 9 0 010 18zm0-4a5 5 0 110-10 5 5 0 010 10zm0-4a1 1 0 110-2 1 1 0 010 2z' },
-  { href: '/zakat', label: fr.nav.zakat, icon: 'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z' },
-  { href: '/purification', label: fr.nav.purification, icon: 'M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z' },
-  { href: '/wealth', label: fr.nav.wealth, icon: 'M3 10l9-6 9 6M5 10v9m14-9v9M9 10v9m6-9v9M3 21h18' },
+  { href: '/dashboard', also: ['/recommandations'], label: fr.nav.dashboard, icon: 'M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z' },
+  { href: '/budget', also: ['/comptes', '/import'], label: fr.nav.budget, icon: 'M4 19V9m6 10V5m6 14v-7m4 7H2' },
+  { href: '/goals', also: [], label: fr.nav.goals, icon: 'M12 21a9 9 0 110-18 9 9 0 010 18zm0-4a5 5 0 110-10 5 5 0 010 10zm0-4a1 1 0 110-2 1 1 0 010 2z' },
+  { href: '/wealth', also: [], label: fr.nav.wealth, icon: 'M3 10l9-6 9 6M5 10v9m14-9v9M9 10v9m6-9v9M3 21h18' },
+  { href: '/finance-islamique', also: ['/zakat', '/purification'], label: fr.nav.islamicFinance, icon: 'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z' },
 ] as const;
 
 function Icon({ d }: { d: string }) {
@@ -33,7 +36,11 @@ function SignOut({ className }: { className?: string }) {
 
 export function AppShell({ children, demo, displayName = null }: { children: ReactNode; demo: boolean; displayName?: string | null }) {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    const item = NAV.find((n) => n.href === href)!;
+    return under(href) || item.also.some(under);
+  };
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[248px_1fr]">
@@ -58,9 +65,9 @@ export function AppShell({ children, demo, displayName = null }: { children: Rea
           {demo ? null : (
             <>
               {displayName ? <p className="text-sm text-ivory">{displayName}</p> : null}
+              <Link href="/recommandations" className="block text-sm underline-offset-4 hover:underline">Mes recommandations</Link>
               <Link href="/comptes" className="block text-sm underline-offset-4 hover:underline">Mes comptes</Link>
               <Link href="/import" className="block text-sm underline-offset-4 hover:underline">Importer un relevé</Link>
-              <Link href="/finance-islamique" className="block text-sm underline-offset-4 hover:underline">Finance islamique</Link>
               <Link href="/parametres" className="block text-sm underline-offset-4 hover:underline">Paramètres</Link>
               <SignOut />
             </>
@@ -87,10 +94,10 @@ export function AppShell({ children, demo, displayName = null }: { children: Rea
         <main id="contenu" className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">{children}</main>
 
         {/* Barre de navigation mobile */}
-        <nav aria-label={fr.nav.mobile} className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-6 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        <nav aria-label={fr.nav.mobile} className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
           {NAV.map((item) => (
             <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}
-              className={cn('flex flex-col items-center gap-1 py-2 text-[10.5px]', isActive(item.href) ? 'text-primary-800' : 'text-ink-muted')}>
+              className={cn('flex flex-col items-center gap-1 px-1 py-2 text-center text-[10.5px] leading-tight', isActive(item.href) ? 'text-primary-800' : 'text-ink-muted')}>
               <Icon d={item.icon} />
               {item.label}
             </Link>

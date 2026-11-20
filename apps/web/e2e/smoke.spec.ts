@@ -14,10 +14,9 @@ test.describe('Sprint 0 — parcours de démonstration', () => {
     const nav = page.getByRole('navigation', { name: isMobile ? 'Navigation mobile' : 'Navigation principale' });
     for (const [label, path, heading] of [
       ['Budget', '/budget', 'Budget'],
-      ['Objectifs', '/goals', 'Projets de vie'],
-      ['Zakat', '/zakat', 'Zakat'],
-      ['Purification', '/purification', 'Purification'],
+      ['Projets', '/goals', 'Projets de vie'],
       ['Patrimoine', '/wealth', 'Patrimoine'],
+      ['Finance islamique', '/finance-islamique', 'Finance islamique'],
     ] as const) {
       await nav.getByRole('link', { name: label }).click();
       await expect(page).toHaveURL(new RegExp(`${path}$`));

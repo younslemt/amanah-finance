@@ -1,17 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * Parcours des six écrans du MVP en mode démo, sur mobile et ordinateur.
+ * Parcours des écrans principaux en mode démo, sur mobile et ordinateur.
  * Vérifie : rendu, navigation, état actif, absence de défilement horizontal,
  * contraste des textes (WCAG AA) et contenus de conformité attendus.
  */
 const SCREENS = [
   { path: '/dashboard', heading: 'Assalamu alaykum', nav: 'Accueil' },
   { path: '/budget', heading: 'Budget', nav: 'Budget' },
-  { path: '/goals', heading: 'Projets de vie', nav: 'Objectifs' },
-  { path: '/zakat', heading: 'Zakat', nav: 'Zakat' },
-  { path: '/purification', heading: 'Purification', nav: 'Purification' },
+  { path: '/budget/optimiser', heading: 'Optimiser mon budget', nav: 'Budget' },
+  { path: '/recommandations', heading: 'Mes recommandations', nav: 'Accueil' },
+  { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
+  { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
+  { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
+  { path: '/purification', heading: 'Purification', nav: 'Finance islamique' },
 ] as const;
 
 function visibleNav(page: Page, isMobile: boolean) {
@@ -100,7 +103,6 @@ test('la connexion est désactivée en démonstration', async ({ page }) => {
 // Sprint 2 : écrans hors barre de navigation, désactivés ou explicatifs en démonstration
 for (const s of [
   { path: '/import', heading: 'Importer un relevé', text: 'désactivé en démonstration' },
-  { path: '/finance-islamique', heading: 'Finance islamique', text: 'consentement explicite distinct' },
 ] as const) {
   test(`écran ${s.path} (démonstration) : rendu, mise en page, contraste`, async ({ page }) => {
     const errors: string[] = [];
@@ -114,3 +116,33 @@ for (const s of [
     expect(errors).toEqual([]);
   });
 }
+
+// Sprint 3 : tableau de bord, simulation et recommandations en démonstration
+test('le tableau de bord présente situation, évolution, capacité, recommandations, projets et actions', async ({ page }) => {
+  await page.goto('/dashboard');
+  await expect(page.getByTestId('ma-situation')).toContainText('Ma situation financière');
+  await expect(page.getByTestId('synthese')).toContainText('par mois');
+  await expect(page.getByRole('img', { name: /Revenus et dépenses sur 3 mois/ })).toBeVisible();
+  await expect(page.getByTestId('capacite')).toContainText('Estimée');
+  await expect(page.getByTestId('recommandations-prioritaires').getByTestId('recommandation').first()).toBeVisible();
+  await expect(page.getByTestId('prochaines-actions').getByRole('link').first()).toBeVisible();
+});
+
+test('la simulation calcule sans rien enregistrer en démonstration', async ({ page }) => {
+  await page.goto('/budget/optimiser');
+  await expect(page.getByTestId('analyse-situation')).toContainText('Capacité d’épargne estimée');
+  await page.getByTestId('reduction-globale').fill('50');
+  await expect(page.getByTestId('sim-mensuel')).toContainText('50,00');
+  await expect(page.getByTestId('sim-annuel')).toContainText('600');
+  await expect(page.getByTestId('incidence-objectifs')).toBeVisible();
+  await page.getByTestId('form-scenario').getByRole('button', { name: 'Enregistrer le scénario' }).click();
+  await expect(page.getByTestId('form-scenario').getByRole('alert')).toContainText('mode démonstration');
+});
+
+test('chaque recommandation expose ses données', async ({ page }) => {
+  await page.goto('/recommandations');
+  const first = page.getByTestId('recommandation').first();
+  await first.getByText('Pourquoi ? Les données utilisées').click();
+  await expect(first.getByTestId('donnees-utilisees')).toBeVisible();
+  await expect(page.getByRole('note').filter({ hasText: 'ne constituent ni un conseil en investissement' })).toBeVisible();
+});
