@@ -17,7 +17,7 @@ export async function loadZakatPage(ctx: SessionContext) {
     ctx.supabase.from('zakat_calculations')
       .select('id, owner_id, as_of, status, zakat_due_cents, zakatable_cents, nisab_cents, engine_version, ruleset_id, ruleset_version, inputs, result, created_at')
       .eq('household_id', ctx.householdId).eq('owner_id', ctx.userId).order('as_of', { ascending: false }).limit(30),
-    ctx.supabase.from('contributions').select('id, owner_id, kind, amount_cents, paid_on, beneficiary_label, transaction_id, zakat_calculation_id')
+    ctx.supabase.from('contributions').select('id, owner_id, kind, amount_cents, paid_on, beneficiary_label, transaction_id, zakat_calculation_id, confirmation_source, confirmed_on')
       .eq('household_id', ctx.householdId).eq('owner_id', ctx.userId).eq('kind', 'zakat').limit(1000),
   ]);
   for (const r of [assets, liabilities, prices, calcs, payments]) if (r.error) throw r.error;
@@ -32,9 +32,9 @@ export async function loadZakatPage(ctx: SessionContext) {
 
 export async function loadFitr(ctx: SessionContext) {
   const [fitr, payments] = await Promise.all([
-    ctx.supabase.from('zakat_fitr_obligations').select('id, owner_id, year, persons, amount_per_person_cents, due_cents, amount_source')
-      .eq('household_id', ctx.householdId).eq('owner_id', ctx.userId).order('year', { ascending: false }),
-    ctx.supabase.from('contributions').select('id, owner_id, kind, amount_cents, paid_on, beneficiary_label, transaction_id, zakat_fitr_id')
+    ctx.supabase.from('zakat_fitr_obligations').select('id, owner_id, civil_year, hijri_year, hijri_year_status, persons, amount_per_person_cents, due_cents, amount_source')
+      .eq('household_id', ctx.householdId).eq('owner_id', ctx.userId).order('civil_year', { ascending: false }),
+    ctx.supabase.from('contributions').select('id, owner_id, kind, amount_cents, paid_on, beneficiary_label, transaction_id, zakat_fitr_id, confirmation_source, confirmed_on')
       .eq('household_id', ctx.householdId).eq('owner_id', ctx.userId).eq('kind', 'zakat_al_fitr').limit(1000),
   ]);
   for (const r of [fitr, payments]) if (r.error) throw r.error;

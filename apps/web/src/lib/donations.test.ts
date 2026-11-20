@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calculateZakat, prepareZakat } from '@amanah/engines';
-import { donationsModel, type ContributionRow } from './contributions-view.ts';
+import { donationsModel, STATUS_LABEL, type ContributionRow } from './contributions-view.ts';
 import { DEMO_CALCS, DEMO_CONTRIBUTIONS, DEMO_DEBITS, DEMO_FITR, DEMO_USER } from './demo-donations.ts';
 import { zakatHistory, type CalculationRow } from './zakat-view.ts';
 import { contributionSchema, fitrSchema, metalPriceSchema, zakatSettingsSchema } from './validation.ts';
@@ -21,16 +21,27 @@ describe('dons : modèle d’affichage', () => {
       row('z1', 'zakat', 25_000, '2026-11-19', { zakat_calculation_id: 'calc', transaction_id: 't-z' }),
       row('x1', 'sadaqah', 9_999, '2026-10-01', { owner_id: other }),
     ],
-    fitr: [{ id: 'f', owner_id: me, year: 2026, persons: 4, amount_per_person_cents: 1_000, due_cents: '4000' as unknown as number, amount_source: 'Source fictive' }],
+    fitr: [{ id: 'f', owner_id: me, civil_year: 2026, persons: 4, amount_per_person_cents: 1_000, due_cents: '4000' as unknown as number, amount_source: 'Source fictive' }],
     calculations: [{ id: 'calc', owner_id: me, as_of: '2026-11-15', status: 'due', zakat_due_cents: '30000' }],
     debits: [{ id: 't-don', booked_on: '2026-10-05', amount_cents: '-5000', description: 'VIREMENT ASSOCIATION FICTIVE' }],
   });
 
   it('totaux de la personne, purification comptée une fois, dons partagés exclus des totaux', () => {
     expect(m.years[0]!.totalCents).toBe(5_000 + 800 + 25_000);
-    expect(m.years[0]!.verifiedCents).toBe(25_000);
+    expect(m.years[0]!.bankMatchedCents).toBe(25_000);
+    expect(m.years[0]!.confirmedCents).toBe(0);
     expect(m.views).toHaveLength(4);
     expect(m.views.find((v) => v.id === 'x1')!.mine).toBe(false);
+  });
+  it('libellés : un rapprochement n’est jamais présenté comme une vérification', () => {
+    expect(STATUS_LABEL).toEqual({ declared: 'Déclaré', bank_matched: 'Rapproché avec une opération bancaire', confirmed: 'Confirmé' });
+    expect(m.views.find((v) => v.id === 'z1')!.allocation).not.toBeNull();
+  });
+  it('statut « confirmé » réservé : seulement si la base le porte', () => {
+    const c = donationsModel({ userId: me, fitr: [], calculations: [], debits: [],
+      contributions: [row('k', 'zakat', 100, '2026-11-01', { transaction_id: 't', confirmation_source: 'partner', confirmed_on: '2026-11-03' })] });
+    expect(c.views[0]!.status).toBe('confirmed');
+    expect(c.years[0]!.confirmedCents).toBe(100);
   });
   it('purification : affichée, jamais modifiable depuis les dons', () => {
     const p = m.views.find((v) => v.id === 'p1')!;
@@ -40,7 +51,9 @@ describe('dons : modèle d’affichage', () => {
   it('affectation et suivi dû / payé / reste', () => {
     expect(m.views.find((v) => v.id === 'z1')!.allocation).toBe('calcul de Zakat du 15/11/2026');
     expect(m.zakat[0]).toMatchObject({ dueCents: 30_000, paidCents: 25_000, remainingCents: 5_000, asOf: '2026-11-15' });
-    expect(m.fitr[0]).toMatchObject({ dueCents: 4_000, paidCents: 0, remainingCents: 4_000, year: 2026 });
+    expect(m.fitr[0]).toMatchObject({ dueCents: 4_000, paidCents: 0, remainingCents: 4_000, civilYear: 2026, hijriYear: null });
+    expect(m.views.find((v) => v.id === 'z1')!.status).toBe('bank_matched');
+    expect(m.views.find((v) => v.id === 'c1')!.status).toBe('declared');
   });
   it('rapprochement proposé seulement pour un don déclaré de la personne', () => {
     expect(m.views.find((v) => v.id === 'c1')!.candidates.map((c) => c.transactionId)).toEqual(['t-don']);
@@ -67,8 +80,9 @@ describe('dons : validation des saisies', () => {
     expect(contributionSchema.safeParse({ ...base, kind: 'zakat', zakatCalculationId: '' }).success).toBe(true);
   });
   it('Zakat al-Fitr et prix : source obligatoire', () => {
-    expect(fitrSchema.safeParse({ year: '2026', persons: '4', amountPerPerson: '10', source: '' }).success).toBe(false);
-    expect(fitrSchema.safeParse({ year: '2026', persons: '4', amountPerPerson: '10', source: 'Mosquée fictive' }).success).toBe(true);
+    expect(fitrSchema.safeParse({ civilYear: '2026', persons: '4', amountPerPerson: '10', source: '' }).success).toBe(false);
+    expect(fitrSchema.safeParse({ civilYear: '2026', persons: '4', amountPerPerson: '10', source: 'Mosquée fictive' }).success).toBe(true);
+    expect(fitrSchema.safeParse({ civilYear: '1447', persons: '4', amountPerPerson: '10', source: 'Mosquée fictive' }).success).toBe(false); // une année hégirienne n'est pas une année civile
     expect(metalPriceSchema.safeParse({ symbol: 'XAU', pricePerGram: '110,00', asOf: '2026-11-18', source: '' }).success).toBe(false);
   });
   it('réglages : rien n’est choisi par défaut, part requise pour le ratio', () => {
@@ -101,7 +115,7 @@ describe('Zakat : historique reproductible', () => {
       calc('old', '2025-11-20', 20_000, 800_000, { inputs: { fictif: true } }),
       calc('new', '2026-11-20', result.dueCents, result.netZakatableCents),
       calc('autre', '2026-11-20', 1, 1, { owner_id: other }),
-    ], me, [{ id: 'new', dueCents: result.dueCents, paidCents: 10_000, verifiedPaidCents: 0, remainingCents: result.dueCents - 10_000, excessCents: 0, contributionIds: ['z'] }]);
+    ], me, [{ id: 'new', dueCents: result.dueCents, paidCents: 10_000, bankMatchedPaidCents: 0, confirmedPaidCents: 0, remainingCents: result.dueCents - 10_000, excessCents: 0, contributionIds: ['z'] }]);
     expect(h.map((e) => e.id)).toEqual(['new', 'old']);
     expect(h[0]!.replay).toEqual({ reproducible: true, engineVersionMatches: true, differences: [] });
     expect(h[0]!.change).toEqual({ netCents: result.netZakatableCents - 800_000, dueCents: result.dueCents - 20_000, previousAsOf: '2025-11-20' });

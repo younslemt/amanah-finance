@@ -6,7 +6,9 @@
  *   qui la mentionnent (dons, Zakat, purification) : pas de double comptage ;
  * - une purification n'est créée que par le parcours de purification (contribution liée à
  *   des éléments purifiés) : le module de dons l'affiche, il ne la ressaisit jamais ;
- * - « déclaré » = saisi par l'utilisateur ; « vérifié » = rapproché d'une opération bancaire
+ * - statut d'un don : « déclaré » (saisi par l'utilisateur) ; « rapproché » (associé par l'utilisateur
+ *   à un débit importé compatible : indice de paiement, PAS une preuve de réception par le bénéficiaire) ;
+ *   « confirmé » (réservé : preuve supplémentaire ou confirmation d'un partenaire fiable, non activé) ;
  *   (débit du même montant, à quelques jours) qu'il a importée ; aucun paiement n'est exécuté ;
  * - les affectations rattachent un don à ce qu'il règle : un calcul de Zakat, une Zakat
  *   al-Fitr d'une année, des éléments de purification.
@@ -27,15 +29,22 @@ export interface Contribution {
   amountCents: Cents;
   paidOn: IsoDate;
   beneficiary?: string;
-  /** Opération bancaire (débit) rapprochée : le don est alors « vérifié ». */
+  /** Opération bancaire (débit) rapprochée : le don est alors « rapproché », pas « confirmé ». */
   transactionId?: string;
+  /**
+   * Réservé au futur statut « confirmé » : preuve supplémentaire ou confirmation d'un partenaire
+   * fiable. Jamais renseigné par l'utilisateur ; aucune source n'est activée à ce stade.
+   */
+  confirmation?: { source: 'partner' | 'proof'; confirmedOn: IsoDate };
   /** Affectations exclusives selon le type. */
   zakatCalculationId?: string;
   zakatFitrId?: string;
 }
 
-export type ContributionVerification = 'declared' | 'verified';
-export const verificationOf = (c: Pick<Contribution, 'transactionId'>): ContributionVerification => (c.transactionId ? 'verified' : 'declared');
+export type ContributionStatus = 'declared' | 'bank_matched' | 'confirmed';
+/** Le statut le plus fort l'emporte : confirmé > rapproché > déclaré. */
+export const statusOf = (c: Pick<Contribution, 'transactionId' | 'confirmation'>): ContributionStatus =>
+  (c.confirmation ? 'confirmed' : c.transactionId ? 'bank_matched' : 'declared');
 
 /** Une affectation n'a de sens que pour le type correspondant. */
 export function allocationError(c: Pick<Contribution, 'kind' | 'zakatCalculationId' | 'zakatFitrId'>): string | null {
@@ -50,17 +59,18 @@ export function uniqueContributions<T extends { id: string }>(list: readonly T[]
   return list.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }
 
-export interface KindTotals { totalCents: Cents; declaredCents: Cents; verifiedCents: Cents; count: number }
+export interface KindTotals { totalCents: Cents; declaredCents: Cents; bankMatchedCents: Cents; confirmedCents: Cents; count: number }
 export interface YearSummary {
   year: number;
   totalCents: Cents;
   declaredCents: Cents;
-  verifiedCents: Cents;
+  bankMatchedCents: Cents;
+  confirmedCents: Cents;
   count: number;
   byKind: Record<ContributionKind, KindTotals>;
 }
 
-const emptyKind = (): KindTotals => ({ totalCents: 0, declaredCents: 0, verifiedCents: 0, count: 0 });
+const emptyKind = (): KindTotals => ({ totalCents: 0, declaredCents: 0, bankMatchedCents: 0, confirmedCents: 0, count: 0 });
 
 /** Totaux par année puis par type ; années les plus récentes d'abord. */
 export function summarizeContributions(list: readonly Contribution[]): YearSummary[] {
@@ -70,16 +80,18 @@ export function summarizeContributions(list: readonly Contribution[]): YearSumma
     const y = Number(c.paidOn.slice(0, 4));
     let s = years.get(y);
     if (!s) {
-      s = { year: y, totalCents: 0, declaredCents: 0, verifiedCents: 0, count: 0,
+      s = { year: y, totalCents: 0, declaredCents: 0, bankMatchedCents: 0, confirmedCents: 0, count: 0,
         byKind: Object.fromEntries(CONTRIBUTION_KINDS.map((k) => [k, emptyKind()])) as Record<ContributionKind, KindTotals> };
       years.set(y, s);
     }
     const k = s.byKind[c.kind];
-    const verified = verificationOf(c) === 'verified';
+    const status = statusOf(c);
     for (const t of [s, k]) {
       t.totalCents += c.amountCents;
       t.count += 1;
-      if (verified) t.verifiedCents += c.amountCents; else t.declaredCents += c.amountCents;
+      if (status === 'confirmed') t.confirmedCents += c.amountCents;
+      else if (status === 'bank_matched') t.bankMatchedCents += c.amountCents;
+      else t.declaredCents += c.amountCents;
     }
   }
   return [...years.values()].sort((a, b) => b.year - a.year);
@@ -89,7 +101,8 @@ export interface Settlement {
   id: string;
   dueCents: Cents;
   paidCents: Cents;
-  verifiedPaidCents: Cents;
+  bankMatchedPaidCents: Cents;
+  confirmedPaidCents: Cents;
   remainingCents: Cents;
   excessCents: Cents;
   contributionIds: string[];
@@ -97,9 +110,9 @@ export interface Settlement {
 
 function settle(id: string, dueCents: Cents, payments: readonly Contribution[]): Settlement {
   const paid = payments.reduce((s, c) => s + c.amountCents, 0);
-  const verified = payments.filter((c) => c.transactionId).reduce((s, c) => s + c.amountCents, 0);
+  const by = (st: ContributionStatus) => payments.filter((c) => statusOf(c) === st).reduce((s, c) => s + c.amountCents, 0);
   return {
-    id, dueCents, paidCents: paid, verifiedPaidCents: verified,
+    id, dueCents, paidCents: paid, bankMatchedPaidCents: by('bank_matched'), confirmedPaidCents: by('confirmed'),
     remainingCents: Math.max(0, dueCents - paid), excessCents: Math.max(0, paid - dueCents),
     contributionIds: payments.map((c) => c.id),
   };

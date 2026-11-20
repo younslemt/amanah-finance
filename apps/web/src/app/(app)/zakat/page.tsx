@@ -264,7 +264,7 @@ function History({ entries }: { entries: HistoryEntry[] }) {
                 Assiette nette {formatCents(e.netCents)} · nisab {e.nisabCents === null ? 'inconnu' : formatCents(e.nisabCents)} · dû {formatCents(e.dueCents)} · {e.versions}
               </p>
               {e.change ? <p className="text-ink-muted">Depuis le calcul du {formatDate(e.change.previousAsOf)} : assiette {e.change.netCents >= 0 ? '+' : '−'} {formatCents(Math.abs(e.change.netCents))}, dû {e.change.dueCents >= 0 ? '+' : '−'} {formatCents(Math.abs(e.change.dueCents))}</p> : null}
-              {e.settlement && e.dueCents > 0 ? <p className="text-ink-muted">Payé {formatCents(e.settlement.paidCents)} (vérifié {formatCents(e.settlement.verifiedPaidCents)}) · reste <span className="font-medium text-ink">{formatCents(e.settlement.remainingCents)}</span> · <Link href="/dons" className="underline">déclarer un paiement</Link></p> : null}
+              {e.settlement && e.dueCents > 0 ? <p className="text-ink-muted">Payé {formatCents(e.settlement.paidCents)} (rapproché {formatCents(e.settlement.bankMatchedPaidCents)}) · reste <span className="font-medium text-ink">{formatCents(e.settlement.remainingCents)}</span> · <Link href="/dons" className="underline">déclarer un paiement</Link></p> : null}
               {e.replay.reproducible === false ? <p className="text-critical">Champs différents : {e.replay.differences.join(', ')}{e.replay.engineVersionMatches ? '' : ' (version du moteur différente)'}.</p> : null}
               {'reason' in e.replay ? <p className="text-ink-muted">{e.replay.reason}</p> : null}
               {e.result ? (

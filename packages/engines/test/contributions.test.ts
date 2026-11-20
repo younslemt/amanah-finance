@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocationError, beneficiaryHistory, calculateZakat, canonicalJson, fitrSettlements, matchCandidates, prepareZakat,
-  replayZakat, requiredZakatChoices, selectMetalPrice, summarizeContributions, uniqueContributions, verificationOf,
+  replayZakat, requiredZakatChoices, selectMetalPrice, summarizeContributions, uniqueContributions, statusOf,
   zakatAlFitrDue, zakatSettlements, type Contribution, type ZakatAsset, type ZakatChoices, type ZakatLiability,
 } from '../src/index.ts';
 
@@ -28,20 +28,26 @@ describe('contributions : totaux sans double comptage', () => {
     expect(y2026!.byKind.purification.count).toBe(1);
   });
 
-  it('totaux annuels par type, déclaré et vérifié séparés', () => {
+  it('totaux annuels par type : déclaré, rapproché et confirmé séparés', () => {
     const [y2026, y2025] = summarizeContributions(list);
-    expect(y2026!.verifiedCents).toBe(50_000);
+    expect(y2026!.bankMatchedCents).toBe(50_000);
+    expect(y2026!.confirmedCents).toBe(0);
     expect(y2026!.declaredCents).toBe(2_000 + 1_234 + 3_000);
-    expect(y2026!.verifiedCents + y2026!.declaredCents).toBe(y2026!.totalCents);
-    expect(y2026!.byKind.zakat).toEqual({ totalCents: 50_000, declaredCents: 0, verifiedCents: 50_000, count: 1 });
+    expect(y2026!.bankMatchedCents + y2026!.declaredCents).toBe(y2026!.totalCents);
+    expect(y2026!.byKind.zakat).toEqual({ totalCents: 50_000, declaredCents: 0, bankMatchedCents: 50_000, confirmedCents: 0, count: 1 });
     expect(y2025!.year).toBe(2025);
     expect(y2025!.byKind.other.totalCents).toBe(10_000);
     expect(y2025!.byKind.sadaqah.count).toBe(0);
   });
 
-  it('déclaré tant qu’aucune opération bancaire n’est rapprochée', () => {
-    expect(verificationOf(list[0]!)).toBe('verified');
-    expect(verificationOf(list[1]!)).toBe('declared');
+  it('déclaré, puis rapproché (jamais « confirmé » par un simple rapprochement)', () => {
+    expect(statusOf(list[0]!)).toBe('bank_matched');
+    expect(statusOf(list[1]!)).toBe('declared');
+    // Statut réservé : seule une confirmation explicite (partenaire, preuve) le donne
+    const confirmed = { ...list[0]!, confirmation: { source: 'partner' as const, confirmedOn: '2026-03-15' } };
+    expect(statusOf(confirmed)).toBe('confirmed');
+    const [y] = summarizeContributions([confirmed]);
+    expect(y).toMatchObject({ confirmedCents: 50_000, bankMatchedCents: 0, declaredCents: 0 });
   });
 
   it('affectations réservées au type correspondant', () => {
@@ -54,7 +60,7 @@ describe('contributions : totaux sans double comptage', () => {
   it('Zakat due, payée, reste et excédent par calcul ; seules les Zakat affectées comptent', () => {
     const extra = [...list, c('z2', 'zakat', 30_000, '2026-06-01', { zakatCalculationId: 'calc1' }), c('s2', 'sadaqah', 99_999, '2026-06-02', { zakatCalculationId: 'calc1' })];
     const [s1, s2] = zakatSettlements([{ id: 'calc1', dueCents: 100_000 }, { id: 'calc2', dueCents: 0 }], extra);
-    expect(s1).toEqual({ id: 'calc1', dueCents: 100_000, paidCents: 80_000, verifiedPaidCents: 50_000, remainingCents: 20_000, excessCents: 0, contributionIds: ['z1', 'z2'] });
+    expect(s1).toEqual({ id: 'calc1', dueCents: 100_000, paidCents: 80_000, bankMatchedPaidCents: 50_000, confirmedPaidCents: 0, remainingCents: 20_000, excessCents: 0, contributionIds: ['z1', 'z2'] });
     expect(s2!.paidCents).toBe(0);
     const [over] = zakatSettlements([{ id: 'calc1', dueCents: 60_000 }], extra);
     expect(over!.remainingCents).toBe(0);

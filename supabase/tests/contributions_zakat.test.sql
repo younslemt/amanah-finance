@@ -77,7 +77,7 @@ select pg_temp.expect('don dans le futur refusé', format($q$
   values (%L, 'sadaqah', 'Association fictive', 100, date '2099-01-01')$q$, current_setting('t.hr')), false);
 
 -- Vérification bancaire
-select pg_temp.expect('vérifié : débit du même montant à 2 jours', format($q$
+select pg_temp.expect('rapproché : débit du même montant à 2 jours', format($q$
   update public.contributions set transaction_id = %L where note = 'Don fictif'$q$, current_setting('t.tdon')), true);
 select pg_temp.expect('une opération ne prouve qu''une seule contribution', format($q$
   insert into public.contributions (household_id, kind, beneficiary_label, amount_cents, paid_on, transaction_id)
@@ -91,19 +91,26 @@ select pg_temp.expect('montant différent refusé', format($q$
 select pg_temp.expect('crédit (intérêt) refusé comme preuve de don', format($q$
   insert into public.contributions (household_id, kind, beneficiary_label, amount_cents, paid_on, transaction_id)
   values (%L, 'sadaqah', 'Association fictive', 800, date '2026-10-31', %L)$q$, current_setting('t.hr'), current_setting('t.tint')), false);
-select pg_temp.expect('montant modifié après vérification : refusé', $q$
+select pg_temp.expect('statut « confirmé » non saisissable par l''utilisateur (insertion)', format($q$
+  insert into public.contributions (household_id, kind, beneficiary_label, amount_cents, paid_on, confirmation_source, confirmed_on)
+  values (%L, 'sadaqah', 'Association fictive', 100, date '2026-10-01', 'partner', date '2026-10-02')$q$, current_setting('t.hr')), false);
+select pg_temp.expect('statut « confirmé » non saisissable par l''utilisateur (modification)', $q$
+  update public.contributions set confirmation_source = 'proof', confirmed_on = date '2026-10-06' where note = 'Don fictif'$q$, false);
+select pg_temp.expect('montant modifié après rapprochement : refusé', $q$
   update public.contributions set amount_cents = 6000 where note = 'Don fictif'$q$, false);
 
 -- Zakat al-Fitr
 select pg_temp.expect('Zakat al-Fitr : 4 personnes, montant et source choisis', format($q$
-  insert into public.zakat_fitr_obligations (household_id, year, persons, amount_per_person_cents, amount_source)
+  insert into public.zakat_fitr_obligations (household_id, civil_year, persons, amount_per_person_cents, amount_source)
   values (%L, 2026, 4, 1000, 'Montant fictif communiqué par la mosquée')$q$, current_setting('t.hr')), true);
 select pg_temp.check_val('Zakat al-Fitr due calculée par la base', 'select due_cents::text from public.zakat_fitr_obligations', '4000');
+select pg_temp.check_val('Zakat al-Fitr : année hégirienne année civile enregistrée, année hégirienne non déduite',
+  'select count(*)::text from public.zakat_fitr_obligations where hijri_year is null and civil_year = 2026', '1');
 select pg_temp.expect('Zakat al-Fitr sans source refusée', format($q$
-  insert into public.zakat_fitr_obligations (household_id, year, persons, amount_per_person_cents, amount_source)
+  insert into public.zakat_fitr_obligations (household_id, civil_year, persons, amount_per_person_cents, amount_source)
   values (%L, 2025, 2, 1000, '  ')$q$, current_setting('t.hr')), false);
 select pg_temp.expect('une seule Zakat al-Fitr par personne et par année', format($q$
-  insert into public.zakat_fitr_obligations (household_id, year, persons, amount_per_person_cents, amount_source)
+  insert into public.zakat_fitr_obligations (household_id, civil_year, persons, amount_per_person_cents, amount_source)
   values (%L, 2026, 1, 1000, 'Autre source fictive')$q$, current_setting('t.hr')), false);
 select pg_temp.expect('paiement de Zakat al-Fitr affecté', format($q$
   insert into public.contributions (household_id, kind, beneficiary_label, amount_cents, paid_on, zakat_fitr_id)
@@ -198,7 +205,7 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000f3';
 select pg_temp.check_val('Omar ne voit rien du foyer de Rami',
   $q$select (select count(*) from public.contributions) + (select count(*) from public.zakat_fitr_obligations) + (select count(*) from public.zakat_metal_prices)$q$, '0');
 select pg_temp.expect('Omar : écriture dans le foyer de Rami refusée', format($q$
-  insert into public.zakat_fitr_obligations (household_id, year, persons, amount_per_person_cents, amount_source)
+  insert into public.zakat_fitr_obligations (household_id, civil_year, persons, amount_per_person_cents, amount_source)
   values (%L, 2026, 1, 1000, 'Source fictive')$q$, current_setting('t.hr')), false);
 select pg_temp.expect('Omar : opération d''un autre foyer comme preuve refusée', format($q$
   insert into public.contributions (household_id, kind, beneficiary_label, amount_cents, paid_on, transaction_id)

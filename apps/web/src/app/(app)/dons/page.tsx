@@ -8,7 +8,7 @@ import { isDemoMode } from '@/lib/env';
 import { formatCents, formatDate } from '@/lib/format';
 import { religiousAccess } from '@/lib/supabase/session';
 import { loadDonations } from '@/lib/supabase/contributions';
-import { donationsModel, KIND_LABEL, type DonationsModel } from '@/lib/contributions-view';
+import { donationsModel, KIND_LABEL, STATUS_LABEL, type DonationsModel } from '@/lib/contributions-view';
 import { DEMO_CALCS, DEMO_CONTRIBUTIONS, DEMO_DEBITS, DEMO_FITR, DEMO_USER } from '@/lib/demo-donations';
 import { CONTRIBUTION_KINDS } from '@amanah/engines';
 import { createContribution, deleteContribution, linkContribution } from './actions';
@@ -26,7 +26,7 @@ function Summary({ m }: { m: DonationsModel }) {
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4" data-testid="synthese-dons">
         <Card><Stat label={`Total ${current.year}`} value={formatCents(current.totalCents)} hint={`${current.count} don(s)`} /></Card>
         <Card><Stat label="Déclaré par vous" value={formatCents(current.declaredCents)} hint="Saisi, sans preuve bancaire" /></Card>
-        <Card><Stat label="Vérifié" value={formatCents(current.verifiedCents)} hint="Rapproché d’une opération importée" tone="positive" /></Card>
+        <Card><Stat label="Rapproché avec une opération bancaire" value={formatCents(current.bankMatchedCents)} hint="Débit importé compatible : pas une confirmation de réception" /></Card>
         <Card><Stat label="Dont purification" value={formatCents(current.byKind.purification.totalCents)} hint="Comptée une seule fois" /></Card>
       </div>
       <Card className="mt-4">
@@ -68,7 +68,7 @@ function Obligations({ m }: { m: DonationsModel }) {
             {m.zakat.map((s) => (
               <li key={s.id} className="py-2">
                 <p className="font-medium">Calcul du {formatDate(s.asOf)}</p>
-                <p className="text-ink-muted">Dû {formatCents(s.dueCents)} · payé {formatCents(s.paidCents)} (dont vérifié {formatCents(s.verifiedPaidCents)}) · reste <span className="font-medium text-ink">{formatCents(s.remainingCents)}</span>{s.excessCents ? ` · au-delà du dû ${formatCents(s.excessCents)}` : ''}</p>
+                <p className="text-ink-muted">Dû {formatCents(s.dueCents)} · payé {formatCents(s.paidCents)} (dont rapproché {formatCents(s.bankMatchedPaidCents)}) · reste <span className="font-medium text-ink">{formatCents(s.remainingCents)}</span>{s.excessCents ? ` · au-delà du dû ${formatCents(s.excessCents)}` : ''}</p>
               </li>
             ))}
           </ul>
@@ -80,7 +80,7 @@ function Obligations({ m }: { m: DonationsModel }) {
           <ul className="divide-y divide-line text-sm" data-testid="suivi-fitr">
             {m.fitr.map((s) => (
               <li key={s.id} className="py-2">
-                <p className="font-medium">{s.year} · {s.persons} personne(s) × {formatCents(s.amountPerPersonCents)}</p>
+                <p className="font-medium">Année civile {s.civilYear} · {s.persons} personne(s) × {formatCents(s.amountPerPersonCents)}</p>
                 <p className="text-ink-muted">Dû {formatCents(s.dueCents)} · payé {formatCents(s.paidCents)} · reste <span className="font-medium text-ink">{formatCents(s.remainingCents)}</span></p>
               </li>
             ))}
@@ -106,20 +106,20 @@ function History({ m, interactive }: { m: DonationsModel; interactive: boolean }
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {v.fromPurification ? <Badge tone="neutral">Parcours de purification</Badge> : null}
-                  <Badge tone={v.verification === 'verified' ? 'positive' : 'warning'}>{v.verification === 'verified' ? 'Vérifié (opération bancaire)' : 'Déclaré'}</Badge>
+                  <Badge tone={v.status === 'confirmed' ? 'positive' : v.status === 'bank_matched' ? 'neutral' : 'warning'}>{STATUS_LABEL[v.status]}</Badge>
                 </div>
               </div>
               {interactive && v.mine ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {v.verification === 'declared' && v.candidates.map((c) => (
-                    <ActionForm key={c.transactionId} action={linkContribution} variant="quiet" testId="form-verifier-don"
-                      submitLabel={`Vérifier avec « ${c.description} » du ${formatDate(c.bookedOn)}`}>
+                  {v.status === 'declared' && v.candidates.map((c) => (
+                    <ActionForm key={c.transactionId} action={linkContribution} variant="quiet" testId="form-rapprocher-don"
+                      submitLabel={`Rapprocher de « ${c.description} » du ${formatDate(c.bookedOn)}`}>
                       <input type="hidden" name="id" value={v.id} />
                       <input type="hidden" name="transactionId" value={c.transactionId} />
                     </ActionForm>
                   ))}
-                  {v.verification === 'verified' ? (
-                    <ActionForm action={linkContribution} variant="quiet" submitLabel="Retirer le rapprochement" testId="form-retirer-verification">
+                  {v.status === 'bank_matched' ? (
+                    <ActionForm action={linkContribution} variant="quiet" submitLabel="Retirer le rapprochement" testId="form-retirer-rapprochement">
                       <input type="hidden" name="id" value={v.id} />
                       <input type="hidden" name="transactionId" value="" />
                     </ActionForm>
@@ -164,7 +164,7 @@ function NewContribution({ m, today, calcs, fitr }: { m: DonationsModel; today: 
         {fitr.length ? (
           <SelectField label="Affecter à une Zakat al-Fitr (Zakat al-Fitr seulement)" name="zakatFitrId" defaultValue="">
             <option value="">Aucune affectation</option>
-            {fitr.map((f) => <option key={f.id} value={f.id}>Zakat al-Fitr {f.year} — reste {formatCents(f.remainingCents)}</option>)}
+            {fitr.map((f) => <option key={f.id} value={f.id}>Zakat al-Fitr, année civile {f.civilYear} — reste {formatCents(f.remainingCents)}</option>)}
           </SelectField>
         ) : null}
       </ActionForm>
@@ -175,7 +175,7 @@ function NewContribution({ m, today, calcs, fitr }: { m: DonationsModel; today: 
 function Notices() {
   return (
     <div className="space-y-3">
-      <Notice>« Déclaré » : saisi par vous. « Vérifié » : rapproché d’un débit du même montant, à 10 jours au plus, dans un relevé que vous avez importé. Aucun paiement n’est effectué et aucun justificatif n’est conservé par l’application.</Notice>
+      <Notice>« Déclaré » : saisi par vous. « Rapproché avec une opération bancaire » : associé par vous à un débit du même montant, à 10 jours au plus, dans un relevé importé. C’est un indice de paiement, pas une preuve définitive ni une confirmation de réception par le bénéficiaire. Un statut « Confirmé », fondé sur une preuve supplémentaire ou un partenaire fiable, est prévu ultérieurement. Aucun paiement n’est effectué et aucun justificatif n’est conservé par l’application.</Notice>
       <Notice tone="warning">Montants indicatifs : ni fatwa ni certification. Les obligations (Zakat, Zakat al-Fitr) relèvent de votre choix ou d’un avis religieux qualifié.</Notice>
     </div>
   );

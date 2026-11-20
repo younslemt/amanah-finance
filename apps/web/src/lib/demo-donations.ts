@@ -14,7 +14,7 @@ export const DEMO_CONTRIBUTIONS: ContributionRow[] = [
   { id: 'demo-c5', owner_id: DEMO_USER, kind: 'sadaqah', amount_cents: 2_000, paid_on: '2025-12-24', beneficiary_label: 'Banque alimentaire fictive', note: null },
 ];
 export const DEMO_FITR: FitrRow[] = [
-  { id: 'demo-fitr', owner_id: DEMO_USER, year: 2026, persons: 4, amount_per_person_cents: 1_000, due_cents: 4_000, amount_source: 'Montant fictif communiqué par une mosquée de démonstration' },
+  { id: 'demo-fitr', owner_id: DEMO_USER, civil_year: 2026, persons: 4, amount_per_person_cents: 1_000, due_cents: 4_000, amount_source: 'Montant fictif communiqué par une mosquée de démonstration' },
 ];
 export const DEMO_CALCS: CalcSummaryRow[] = [
   { id: 'demo-calc', owner_id: DEMO_USER, as_of: '2026-11-09', status: 'due', zakat_due_cents: 48_000 },

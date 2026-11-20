@@ -14,7 +14,7 @@ Moteur pur `packages/engines/src/contributions.ts`. Il réutilise la table `cont
 | Totaux annuels | Par année et par type (`summarizeContributions`), avec la part déclarée et la part vérifiée |
 | Affectations | Un don de Zakat peut être affecté à un calcul de Zakat enregistré, une Zakat al-Fitr à l'obligation d'une année. Suivi « dû, payé, reste, au-delà du dû » (`zakatSettlements`, `fitrSettlements`). Affectation impossible vers un autre type ou vers les données d'une autre personne (application ET base) |
 | Pas de double comptage | Une contribution « purification » ne naît que de `record_purification`. Toute saisie directe est refusée par la base, y compris par l'API. Le module de dons l'affiche une fois, sans pouvoir la modifier ni la supprimer. Les totaux dédoublonnent par identifiant |
-| Déclaré ou vérifié | « Déclaré » : saisi par la personne. « Vérifié » : rapproché d'un débit importé du même montant, à 10 jours au plus. Une opération ne prouve qu'un don. Après vérification, le montant n'est plus modifiable. La personne choisit l'opération parmi celles proposées (`matchCandidates`) |
+| Déclaré, rapproché, confirmé | « Déclaré » : saisi par la personne. « Rapproché avec une opération bancaire » : associé par la personne à un débit importé du même montant, à 10 jours au plus, parmi ceux proposés (`matchCandidates`, règles inchangées). Une opération ne peut être rapprochée que d'un don. Après rapprochement, le montant n'est plus modifiable. C'est un **indice de paiement**, ni une preuve définitive ni une confirmation de réception par le bénéficiaire. « Confirmé » est **réservé** : colonnes `confirmation_source` (partenaire, preuve) et `confirmed_on`, que la base interdit à tout utilisateur de renseigner. Statut calculé par `statusOf` ; totaux et règlements séparés (déclaré, rapproché, confirmé). Aucune source de confirmation n'est activée |
 | Confidentialité | Données article 9 (`owner_id`, RLS `religious_readable` / `religious_writable`). Les dons partagés par un membre du foyer sont affichés, mais pas comptés dans les totaux de la personne |
 
 ## Lot 4.2 — Zakat personnalisée (`/zakat`, `/zakat/al-fitr`)
@@ -30,8 +30,18 @@ Le moteur existant `calculateZakat` est réutilisé sans modification. Ajout de 
 | Calcul détaillé | Statut, assiette brute, dettes déduites, nisab, taux, puis chaque ligne avec la règle appliquée et ses références. Les raisons « à déterminer » et les avertissements sont affichés |
 | Enregistrement et reproductibilité | Le serveur refait tout le calcul depuis la base : aucune valeur ne vient du navigateur. Il conserve les entrées exactes du moteur, les options sans objet, les biens exclus, la source des prix, le résultat et les versions. Le calcul enregistré est figé par la base. L'historique refait chaque calcul (`replayZakat`, comparaison insensible à l'ordre des clés JSONB) et affiche « Reproduit à l'identique » ou les champs qui diffèrent |
 | Historique | Calculs de la personne, écart avec le calcul précédent (assiette, montant dû), dû / payé / reste depuis les dons affectés |
-| Zakat al-Fitr séparée | Page et table propres (`zakat_fitr_obligations`) : année, personnes, montant par personne et sa source, tous choisis par la personne, sans valeur par défaut. Une obligation par personne et par année. Les paiements sont déclarés comme dons affectés |
+| Zakat al-Fitr séparée | Page et table propres (`zakat_fitr_obligations`) : **année civile** (calendrier grégorien, colonne `civil_year`), nombre de personnes, montant par personne et sa source, tous choisis par la personne, sans valeur par défaut. Une obligation par personne et par année civile. Les paiements sont déclarés comme dons affectés. **Année hégirienne** préparée (colonnes réservées `hijri_year` et `hijri_year_status` : à confirmer ou confirmée), affichée « non renseignée » : aucune conversion automatique sans référence validée |
 | Référentiel provisoire | `amanah-zakat 1.0.0` affiché comme provisoire, en attente de validation par un comité charia qualifié. Mention « ni fatwa ni certification » sur chaque écran |
+
+## Ajustements avant fusion (validation du fondateur)
+
+- Le statut « Vérifié » est remplacé par « Rapproché avec une opération bancaire ». Le moteur de rapprochement et ses règles sont inchangés : seuls le nom du statut et les totaux sont renommés (`bankMatchedCents`, `bankMatchedPaidCents`). Le futur statut « Confirmé » est préparé dans le moteur, la base et l'affichage, sans être activé.
+- Zakat al-Fitr : l'année enregistrée est explicitement l'année civile (colonne, formulaire, libellés, messages). L'année hégirienne est préparée sans conversion.
+- Tests adaptés :
+  - moteur : statut réservé, totaux séparés ;
+  - application : libellés, statut confirmé lu depuis la base, année hégirienne refusée comme année civile ;
+  - SQL : confirmation refusée à l'utilisateur, année civile enregistrée, année hégirienne non déduite ;
+  - démonstration et parcours réels : nouveaux libellés, absence de « Vérifié », mention de l'année hégirienne.
 
 ## Lot 4.3 — Étude PSD2
 
@@ -56,9 +66,9 @@ Aucune souscription ni connexion.
 
 | Niveau | Contenu |
 | --- | --- |
-| Moteurs | `contributions.test.ts` : totaux sans double comptage, déclaré et vérifié, affectations, règlements, rapprochement, bénéficiaires ; choix requis, aucune valeur par défaut, exclusions, prix et fraîcheur, reproductibilité après passage par JSON, Zakat al-Fitr |
+| Moteurs | `contributions.test.ts` : totaux sans double comptage, déclaré, rapproché et confirmé (réservé), affectations, règlements, rapprochement, bénéficiaires ; choix requis, aucune valeur par défaut, exclusions, prix et fraîcheur, reproductibilité après passage par JSON, Zakat al-Fitr |
 | Application | `donations.test.ts` : modèle d'affichage, validation des saisies (purification refusée, affectations), historique reproductible et altération détectée ; mise à jour des tests de conversion et de synthèse |
-| SQL (PostgreSQL 16 et image Supabase) | `contributions_zakat.test.sql` : propriétaire imposé, purification saisie refusée, vérification bancaire (montant, délai, crédit, unicité), Zakat al-Fitr, prix (source, date), réglages sans défaut, calcul figé, affectations croisées refusées, isolation dans le foyer, sans consentement et entre foyers, effacement au retrait |
+| SQL (PostgreSQL 16 et image Supabase) | `contributions_zakat.test.sql` : propriétaire imposé, purification saisie refusée, rapprochement bancaire (montant, délai, crédit, unicité), confirmation interdite à l'utilisateur, Zakat al-Fitr, prix (source, date), réglages sans défaut, calcul figé, affectations croisées refusées, isolation dans le foyer, sans consentement et entre foyers, effacement au retrait |
 | Démonstration | Écrans `/dons` et `/zakat/al-fitr` : rendu, navigation, contraste, mobile et ordinateur |
 | Parcours réels | `sprint4.spec.ts`, mobile et ordinateur : dons fermés sans consentement ; Zakat sans choix imposé, prix avec source, calcul enregistré et reproduit ; Zakat al-Fitr ; dons affectés, totaux, rapprochement avec un relevé importé ; purification falsifiée refusée par l'API ; isolation entre foyers |
 

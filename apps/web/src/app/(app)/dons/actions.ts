@@ -47,7 +47,10 @@ export async function deleteContribution(_p: FormState, fd: FormData): Promise<F
   return done('Don supprimé.');
 }
 
-/** Rapprochement avec une opération bancaire importée : le don passe de « déclaré » à « vérifié ». */
+/**
+ * Rapprochement avec une opération bancaire importée : le don passe de « déclaré » à « rapproché ».
+ * Ce n'est ni une preuve de paiement définitive ni une preuve de réception par le bénéficiaire.
+ */
 export async function linkContribution(_p: FormState, fd: FormData): Promise<FormState> {
   const ctx = await religiousContext(); if (isState(ctx)) return ctx;
   const parsed = contributionLinkSchema.safeParse(formDataToObject(fd));
@@ -56,5 +59,5 @@ export async function linkContribution(_p: FormState, fd: FormData): Promise<For
     .eq('id', parsed.data.id).eq('household_id', ctx.householdId).eq('owner_id', ctx.userId);
   if (error) { console.error('[dons] link', error.code); return formError('Rapprochement refusé : un débit du même montant, à 10 jours au plus, non déjà utilisé, est requis.'); }
   if (count !== 1) return formError('Don introuvable.');
-  return done(parsed.data.transactionId ? 'Don vérifié par l’opération bancaire sélectionnée.' : 'Rapprochement retiré : le don redevient déclaré.');
+  return done(parsed.data.transactionId ? 'Don rapproché avec l’opération bancaire sélectionnée (indice de paiement, pas une confirmation de réception).' : 'Rapprochement retiré : le don redevient déclaré.');
 }

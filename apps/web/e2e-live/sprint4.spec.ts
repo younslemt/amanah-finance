@@ -7,7 +7,7 @@ import { activateIslamicFinance, apiToken, completeOnboarding, euros, fakeUser, 
 /**
  * Sprint 4 en mode réel, sur mobile et ordinateur : Zakat personnalisée (choix explicites,
  * prix saisi avec source, calcul figé et reproductible), Zakat al-Fitr séparée, dons
- * déclarés puis vérifiés par une opération importée, garde contre le double comptage,
+ * déclarés puis rapprochés d'une opération importée, garde contre le double comptage,
  * isolation entre foyers. Utilisateurs, montants et relevés FICTIFS ; aucun paiement.
  */
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -88,6 +88,8 @@ test.describe.serial('Sprint 4 — dons, Sadaqah et Zakat personnalisée', () =>
     await form.getByLabel('Source du montant').fill('Montant fictif communiqué par une mosquée');
     await form.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(page.getByTestId('liste-fitr')).toContainText(euros('40,00 €'));
+    await expect(page.getByTestId('liste-fitr')).toContainText('année civile');
+    await expect(page.getByTestId('annee-hegirienne')).toContainText('non renseignée');
   });
 
   test('dons : affectations, totaux, vérification bancaire, aucune purification ressaisie', async ({ page }) => {
@@ -114,7 +116,7 @@ test.describe.serial('Sprint 4 — dons, Sadaqah et Zakat personnalisée', () =>
     await expect(page.getByTestId('suivi-fitr')).toContainText(euros('reste 0,00 €'));
     await expect(page.getByTestId('don').filter({ hasText: 'Sadaqah' }).getByText('Déclaré', { exact: true })).toBeVisible();
 
-    // Une opération importée prouve le don : il devient « vérifié »
+    // Une opération importée est rapprochée du don : indice de paiement, pas une confirmation
     await page.goto('/import');
     await page.getByLabel('Compte concerné').selectOption({ label: 'Compte courant fictif' });
     await page.getByLabel('Relevé CSV').setInputFiles(debitStatement());
@@ -123,8 +125,8 @@ test.describe.serial('Sprint 4 — dons, Sadaqah et Zakat personnalisée', () =>
     await expect(page.getByTestId('resultat-import')).toContainText('1 opération(s) importée(s)');
     await page.goto('/dons');
     const sadaqah = page.getByTestId('don').filter({ hasText: 'Sadaqah' });
-    await sadaqah.getByTestId('form-verifier-don').getByRole('button').click();
-    await expect(page.getByTestId('don').filter({ hasText: 'Sadaqah' }).getByText('Vérifié (opération bancaire)')).toBeVisible();
+    await sadaqah.getByTestId('form-rapprocher-don').getByRole('button').click();
+    await expect(page.getByTestId('don').filter({ hasText: 'Sadaqah' }).getByText('Rapproché avec une opération bancaire', { exact: true })).toBeVisible();
 
     const token = await apiToken(G);
     const rows = (await (await rest(token, 'contributions?select=kind,transaction_id')).json()) as Array<{ kind: string; transaction_id: string | null }>;
@@ -146,7 +148,7 @@ test.describe.serial('Sprint 4 — dons, Sadaqah et Zakat personnalisée', () =>
     for (const table of ['contributions', 'zakat_fitr_obligations', 'zakat_metal_prices', 'zakat_calculations', 'zakat_settings']) {
       expect(await (await rest(tokenH, `${table}?select=household_id&household_id=eq.${hidG}`)).json()).toEqual([]);
     }
-    const write = await rest(tokenH, 'zakat_fitr_obligations', { method: 'POST', body: JSON.stringify({ household_id: hidG, year: 2026, persons: 1, amount_per_person_cents: 100, amount_source: 'Source fictive' }) });
+    const write = await rest(tokenH, 'zakat_fitr_obligations', { method: 'POST', body: JSON.stringify({ household_id: hidG, civil_year: 2026, persons: 1, amount_per_person_cents: 100, amount_source: 'Source fictive' }) });
     expect(write.ok).toBe(false);
   });
 });

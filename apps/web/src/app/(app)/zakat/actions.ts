@@ -150,13 +150,13 @@ export async function createFitr(_p: FormState, fd: FormData): Promise<FormState
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
   const d = parsed.data;
   const { error } = await ctx.supabase.from('zakat_fitr_obligations').insert({
-    household_id: ctx.householdId, year: d.year, persons: d.persons, amount_per_person_cents: d.amountPerPerson, amount_source: d.source,
+    household_id: ctx.householdId, civil_year: d.civilYear, persons: d.persons, amount_per_person_cents: d.amountPerPerson, amount_source: d.source,
   });
   if (error) {
     console.error('[zakat] fitr', error.code);
-    return formError(error.code === '23505' ? `Une Zakat al-Fitr ${d.year} existe déjà : supprimez-la pour la ressaisir.` : 'Enregistrement impossible.');
+    return formError(error.code === '23505' ? `Une Zakat al-Fitr est déjà enregistrée pour l’année civile ${d.civilYear} : supprimez-la pour la ressaisir.` : 'Enregistrement impossible.');
   }
-  return done(`Zakat al-Fitr ${d.year} enregistrée : ${d.persons} personne(s).`);
+  return done(`Zakat al-Fitr de l’année civile ${d.civilYear} enregistrée : ${d.persons} personne(s).`);
 }
 
 export async function deleteFitr(_p: FormState, fd: FormData): Promise<FormState> {

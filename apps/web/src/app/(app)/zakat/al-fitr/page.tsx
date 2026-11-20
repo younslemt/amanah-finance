@@ -23,12 +23,13 @@ function List({ fitr, interactive }: { fitr: DonationsModel['fitr']; interactive
       {fitr.map((f) => (
         <li key={f.id}>
           <Card>
-            <CardTitle>Zakat al-Fitr {f.year}</CardTitle>
+            <CardTitle>Zakat al-Fitr — année civile {f.civilYear}</CardTitle>
+            <p className="-mt-2 mb-3 text-sm text-ink-muted" data-testid="annee-hegirienne">Année hégirienne : {f.hijriYear ? `${f.hijriYear.year} (${f.hijriYear.status === 'confirmed' ? 'confirmée' : 'à confirmer'})` : 'non renseignée — aucune conversion automatique sans référence validée'}</p>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <Stat label="Personnes" value={String(f.persons)} />
               <Stat label="Par personne" value={formatCents(f.amountPerPersonCents)} />
               <Stat label="Dû" value={formatCents(f.dueCents)} />
-              <Stat label="Reste" value={formatCents(f.remainingCents)} tone={f.remainingCents === 0 ? 'positive' : 'default'} hint={`Payé ${formatCents(f.paidCents)}, dont vérifié ${formatCents(f.verifiedPaidCents)}`} />
+              <Stat label="Reste" value={formatCents(f.remainingCents)} tone={f.remainingCents === 0 ? 'positive' : 'default'} hint={`Payé ${formatCents(f.paidCents)}, dont rapproché avec une opération bancaire ${formatCents(f.bankMatchedPaidCents)}`} />
             </div>
             <p className="mt-3 text-sm text-ink-muted">Montant par personne choisi par vous, source : {f.source}.</p>
             {interactive ? (
@@ -67,9 +68,10 @@ export default async function FitrPage() {
       <Notices />
       {ctx.canWrite ? (
         <Card className="mt-4">
-          <CardTitle>Enregistrer la Zakat al-Fitr d’une année</CardTitle>
+          <CardTitle>Enregistrer la Zakat al-Fitr d’une année civile</CardTitle>
+          <p className="mb-3 text-sm text-ink-muted">L’année indiquée est l’année civile (calendrier grégorien) du Ramadan concerné. L’année hégirienne correspondante sera ajoutée plus tard, à partir d’une référence validée : elle n’est pas calculée automatiquement.</p>
           <ActionForm action={createFitr} submitLabel="Enregistrer" testId="form-fitr" className="grid gap-3 sm:grid-cols-2">
-            <Field label="Année" name="year" inputMode="numeric" defaultValue={String(year)} required />
+            <Field label="Année civile (calendrier grégorien)" name="civilYear" inputMode="numeric" defaultValue={String(year)} required />
             <Field label="Nombre de personnes" name="persons" inputMode="numeric" required />
             <Field label="Montant par personne (€)" name="amountPerPerson" inputMode="decimal" required />
             <Field label="Source du montant" name="source" maxLength={200} required hint="Par exemple : montant communiqué par votre mosquée." />

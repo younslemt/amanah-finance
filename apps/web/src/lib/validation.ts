@@ -190,7 +190,8 @@ export const contributionLinkSchema = z.object({
 });
 
 export const fitrSchema = z.object({
-  year: z.coerce.number({ message: 'Année invalide.' }).int('Année invalide.').min(2000, 'Année invalide.').max(2100, 'Année invalide.'),
+  /** Année civile (calendrier grégorien) ; l'année hégirienne n'est jamais déduite automatiquement. */
+  civilYear: z.coerce.number({ message: 'Année civile invalide.' }).int('Année civile invalide.').min(2000, 'Année civile invalide.').max(2100, 'Année civile invalide.'),
   persons: z.coerce.number({ message: 'Nombre de personnes invalide.' }).int('Nombre entier requis.').min(1, 'Au moins une personne.').max(30, '30 personnes au plus.'),
   amountPerPerson: amount('Montant par personne', { min: 1 }).refine((v) => v <= 100_000, 'Montant par personne : 1 000 € au plus.'),
   source: z.string().trim().min(3, 'Indiquez d’où vient ce montant (mosquée, organisme, avis suivi…).').max(200, 'Source trop longue.'),

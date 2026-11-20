@@ -1,10 +1,13 @@
 -- =============================================================================
 -- Amanah Finance — Migration 0016 : dons et Sadaqah, Zakat personnalisée (Sprint 4)
 --
---  * Contributions : note, rapprochement avec une opération bancaire (« vérifié »),
+--  * Contributions : note, rapprochement avec une opération bancaire (« rapproché » : indice
+--    de paiement, pas une preuve de réception), colonnes réservées au futur statut « confirmé »,
 --    affectation à un calcul de Zakat ou à une Zakat al-Fitr, garde contre le double
 --    comptage des purifications (créées uniquement par record_purification).
---  * Zakat al-Fitr : obligation annuelle par personne, séparée de la Zakat patrimoniale.
+--  * Zakat al-Fitr : obligation annuelle par personne, séparée de la Zakat patrimoniale,
+--    repérée par l'ANNÉE CIVILE ; l'année hégirienne est prévue (colonnes réservées) sans
+--    aucune conversion automatique tant qu'une référence n'est pas validée.
 --  * Prix des métaux saisis par la personne : source, date, jamais dans le futur.
 --  * Réglages Zakat : plus aucune valeur imposée par défaut (base du nisab, année).
 --  * Toutes ces données sont des données article 9 propres à une personne (owner_id),
@@ -19,15 +22,21 @@ create table public.zakat_fitr_obligations (
   id                       uuid primary key default gen_random_uuid(),
   household_id             uuid not null references public.households (id) on delete cascade,
   owner_id                 uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  year                     smallint not null check (year between 2000 and 2100),
+  civil_year               smallint not null check (civil_year between 2000 and 2100),
+  -- Réservé : année hégirienne correspondante, jamais calculée par l'application sans référence validée
+  hijri_year               smallint check (hijri_year between 1400 and 1600),
+  hijri_year_status        text check (hijri_year_status in ('to_confirm', 'confirmed')),
   persons                  smallint not null check (persons between 1 and 30),
   amount_per_person_cents  bigint not null check (amount_per_person_cents between 1 and 100000),
   due_cents                bigint generated always as (persons * amount_per_person_cents) stored,
   amount_source            text not null check (char_length(btrim(amount_source)) between 3 and 200),
   created_at               timestamptz not null default now(),
-  unique (household_id, owner_id, year),
+  check ((hijri_year is null) = (hijri_year_status is null)),
+  unique (household_id, owner_id, civil_year),
   unique (household_id, id)
 );
+comment on column public.zakat_fitr_obligations.civil_year is 'Année civile (calendrier grégorien) à laquelle la personne rattache sa Zakat al-Fitr.';
+comment on column public.zakat_fitr_obligations.hijri_year is 'Réservé : année hégirienne correspondante. Aucune conversion automatique sans référence validée par un comité qualifié.';
 create index zakat_fitr_owner_idx on public.zakat_fitr_obligations (owner_id);
 
 -- -----------------------------------------------------------------------------
@@ -89,6 +98,10 @@ alter table public.contributions
   add column note           text check (char_length(note) <= 300),
   add column transaction_id uuid,
   add column zakat_fitr_id  uuid,
+  -- Réservé au futur statut « confirmé » (preuve supplémentaire ou partenaire fiable) : jamais saisi par l'utilisateur
+  add column confirmation_source text check (confirmation_source in ('partner', 'proof')),
+  add column confirmed_on   date,
+  add constraint contributions_confirmation_complete check ((confirmation_source is null) = (confirmed_on is null)),
   add constraint contributions_transaction_same_household
     foreign key (household_id, transaction_id) references public.transactions (household_id, id) on delete set null (transaction_id),
   add constraint contributions_fitr_same_household
@@ -104,6 +117,11 @@ declare
   tx record;
   link_owner uuid;
 begin
+  -- Statut « confirmé » : réservé à un processus serveur futur (aucun client ne peut le poser)
+  if auth.uid() is not null and (new.confirmation_source is not null or new.confirmed_on is not null)
+     and (tg_op = 'INSERT' or new.confirmation_source is distinct from old.confirmation_source or new.confirmed_on is distinct from old.confirmed_on) then
+    raise exception 'la confirmation d''un don ne peut pas être saisie par l''utilisateur' using errcode = 'insufficient_privilege';
+  end if;
   if tg_op = 'INSERT' then
     -- Une purification naît du parcours de purification (éléments liés) : jamais ressaisie ici
     if new.kind = 'purification' and coalesce(current_setting('amanah.recording_purification', true), '') <> 'on' then
@@ -123,7 +141,7 @@ begin
     raise exception 'la date du don ne peut pas être dans le futur' using errcode = 'check_violation';
   end if;
 
-  -- Vérification : débit du même montant, à 10 jours au plus de la date déclarée
+  -- Rapprochement : débit du même montant, à 10 jours au plus de la date déclarée
   if new.transaction_id is not null then
     select amount_cents, booked_on into tx from public.transactions
     where household_id = new.household_id and id = new.transaction_id;

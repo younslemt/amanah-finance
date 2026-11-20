@@ -3,9 +3,16 @@
  * et préparation de l'affichage. Fonctions pures, testées sans base.
  */
 import {
-  beneficiaryHistory, fitrSettlements, matchCandidates, summarizeContributions, uniqueContributions, verificationOf, zakatSettlements,
-  type BankDebit, type Contribution, type ContributionKind, type MatchCandidate, type Settlement,
+  beneficiaryHistory, fitrSettlements, matchCandidates, summarizeContributions, uniqueContributions, statusOf, zakatSettlements,
+  type BankDebit, type Contribution, type ContributionKind, type ContributionStatus, type MatchCandidate, type Settlement,
 } from '@amanah/engines';
+
+/** Libellés des statuts : un rapprochement n'est ni une preuve de paiement ni une preuve de réception. */
+export const STATUS_LABEL: Record<ContributionStatus, string> = {
+  declared: 'Déclaré',
+  bank_matched: 'Rapproché avec une opération bancaire',
+  confirmed: 'Confirmé',
+};
 
 export const KIND_LABEL: Record<ContributionKind, string> = {
   zakat: 'Zakat',
@@ -20,8 +27,9 @@ export interface ContributionRow {
   id: string; owner_id: string; kind: ContributionKind; amount_cents: number | string; paid_on: string;
   beneficiary_label: string | null; note?: string | null; transaction_id?: string | null;
   zakat_calculation_id?: string | null; zakat_fitr_id?: string | null;
+  confirmation_source?: 'partner' | 'proof' | null; confirmed_on?: string | null;
 }
-export interface FitrRow { id: string; owner_id: string; year: number; persons: number; amount_per_person_cents: number | string; due_cents: number | string; amount_source: string }
+export interface FitrRow { id: string; owner_id: string; civil_year: number; hijri_year?: number | null; hijri_year_status?: 'to_confirm' | 'confirmed' | null; persons: number; amount_per_person_cents: number | string; due_cents: number | string; amount_source: string }
 export interface CalcSummaryRow { id: string; owner_id: string; as_of: string; status: 'to_determine' | 'below_nisab' | 'hawl_incomplete' | 'due'; zakat_due_cents: number | string }
 export interface DebitRow { id: string; booked_on: string; amount_cents: number | string; description: string }
 
@@ -38,6 +46,7 @@ export function toContribution(r: ContributionRow): Contribution {
     ...(r.transaction_id ? { transactionId: r.transaction_id } : {}),
     ...(r.zakat_calculation_id ? { zakatCalculationId: r.zakat_calculation_id } : {}),
     ...(r.zakat_fitr_id ? { zakatFitrId: r.zakat_fitr_id } : {}),
+    ...(r.confirmation_source && r.confirmed_on ? { confirmation: { source: r.confirmation_source, confirmedOn: r.confirmed_on } } : {}),
   };
 }
 
@@ -50,14 +59,15 @@ export interface ContributionView {
   beneficiary: string;
   note: string | null;
   mine: boolean;
-  verification: 'declared' | 'verified';
+  /** Déclaré, rapproché avec une opération bancaire, ou confirmé (statut réservé, non activé). */
+  status: ContributionStatus;
   /** Purification : créée par le parcours de purification, affichée ici sans être ressaisie. */
   fromPurification: boolean;
   /** Ce que le don règle (calcul de Zakat, Zakat al-Fitr d'une année), s'il est affecté. */
   allocation: string | null;
   /** Suppression et modification : dons déclarés de la personne, hors purification. */
   editable: boolean;
-  /** Opérations bancaires pouvant prouver le don (non vérifié, propriétaire). */
+  /** Opérations bancaires pouvant être rapprochées du don (déclaré, propriétaire). */
   candidates: MatchCandidate[];
 }
 
@@ -66,7 +76,7 @@ export interface DonationsModel {
   years: ReturnType<typeof summarizeContributions>;
   beneficiaries: ReturnType<typeof beneficiaryHistory>;
   zakat: Array<Settlement & { asOf: string }>;
-  fitr: Array<Settlement & { year: number; persons: number; amountPerPersonCents: number; source: string }>;
+  fitr: Array<Settlement & { civilYear: number; hijriYear: { year: number; status: 'to_confirm' | 'confirmed' } | null; persons: number; amountPerPersonCents: number; source: string }>;
 }
 
 export function donationsModel(args: {
@@ -85,19 +95,19 @@ export function donationsModel(args: {
   const calcs = args.calculations.filter((c) => c.owner_id === args.userId);
   const fitr = args.fitr.filter((f) => f.owner_id === args.userId);
   const calcLabel = new Map(calcs.map((c) => [c.id, `calcul de Zakat du ${c.as_of.split('-').reverse().join('/')}`]));
-  const fitrLabel = new Map(fitr.map((f) => [f.id, `Zakat al-Fitr ${f.year}`]));
+  const fitrLabel = new Map(fitr.map((f) => [f.id, `Zakat al-Fitr, année civile ${f.civil_year}`]));
 
   const views = rows.map((r): ContributionView => {
     const c = toContribution(r);
     const own = r.owner_id === args.userId;
-    const verification = verificationOf(c);
+    const status = statusOf(c);
     return {
       id: r.id, kind: r.kind, kindLabel: KIND_LABEL[r.kind], amountCents: c.amountCents, paidOn: r.paid_on,
       beneficiary: r.beneficiary_label ?? 'Bénéficiaire non précisé', note: r.note ?? null, mine: own,
-      verification, fromPurification: r.kind === 'purification',
+      status, fromPurification: r.kind === 'purification',
       allocation: (r.zakat_calculation_id && calcLabel.get(r.zakat_calculation_id)) || (r.zakat_fitr_id && fitrLabel.get(r.zakat_fitr_id)) || null,
       editable: own && r.kind !== 'purification',
-      candidates: own && verification === 'declared' ? matchCandidates(c, debits, linked).slice(0, 3) : [],
+      candidates: own && status === 'declared' ? matchCandidates(c, debits, linked).slice(0, 3) : [],
     };
   }).sort((a, b) => (a.paidOn < b.paidOn ? 1 : a.paidOn > b.paidOn ? -1 : a.id.localeCompare(b.id)));
 
@@ -109,7 +119,7 @@ export function donationsModel(args: {
       .map((s) => ({ ...s, asOf: calcs.find((c) => c.id === s.id)!.as_of })),
     fitr: fitrSettlements(fitr.map((f) => ({ id: f.id, dueCents: n(f.due_cents) })), mine).map((s) => {
       const f = fitr.find((x) => x.id === s.id)!;
-      return { ...s, year: f.year, persons: f.persons, amountPerPersonCents: n(f.amount_per_person_cents), source: f.amount_source };
+      return { ...s, civilYear: f.civil_year, hijriYear: f.hijri_year && f.hijri_year_status ? { year: f.hijri_year, status: f.hijri_year_status } : null, persons: f.persons, amountPerPersonCents: n(f.amount_per_person_cents), source: f.amount_source };
     }),
   };
 }
