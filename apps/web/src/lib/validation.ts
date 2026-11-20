@@ -145,3 +145,21 @@ export const purificationRecordSchema = z.object({
   paidOn: isoDate('Date de la purification'),
   beneficiary: z.string().trim().min(1, 'Indiquez le bénéficiaire.').max(120, 'Nom du bénéficiaire trop long.'),
 });
+
+// --- Optimisation budgétaire (Sprint 3) -----------------------------------------
+const cents = z.number().int().min(1).max(10_000_000);
+export const adjustmentSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('total'), monthlyCents: cents }),
+  z.object({ type: z.literal('category'), categorySlug: z.string().regex(/^[a-z0-9_-]{2,60}$/), monthlyCents: cents }),
+  z.object({ type: z.literal('cancel_recurring'), seriesKey: z.string().min(3).max(120) }),
+]);
+export const scenarioSchema = z.object({
+  name: z.string().trim().min(1, 'Donnez un nom au scénario.').max(80, 'Nom trop long (80 caractères au plus).'),
+  adjustments: z.array(adjustmentSchema).min(1, 'Ajoutez au moins un ajustement.').max(50),
+});
+
+/** Lit la liste d'ajustements transmise par le formulaire (JSON), sans jamais lever d'exception. */
+export function parseAdjustments(raw: unknown): unknown {
+  if (typeof raw !== 'string' || raw.length > 20_000) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}

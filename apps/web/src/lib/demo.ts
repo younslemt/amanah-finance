@@ -1,4 +1,4 @@
-import { categorize, type CategoryInfo, type CategorizationRule, type Transaction } from '@amanah/engines';
+import { categorize, type AnalysisCategory, type CategorizationRule, type Transaction } from '@amanah/engines';
 import {
   DEMO_ACCOUNTS, DEMO_ALLOCATIONS, DEMO_AS_OF, DEMO_ASSETS, DEMO_GOALS, DEMO_LIABILITIES,
   DEMO_PRICES, DEMO_TRANSACTIONS,
@@ -6,20 +6,20 @@ import {
 import { accountsToAssets, type HouseholdData } from './snapshot.ts';
 
 /** Miroir des catégories système de la migration 0005 (utilisé en mode démo). */
-export const SYSTEM_CATEGORIES: CategoryInfo[] = [
+export const SYSTEM_CATEGORIES: AnalysisCategory[] = [
   { slug: 'salaire', kind: 'income', isEssential: false, isInterest: false },
   { slug: 'allocations_familiales', kind: 'income', isEssential: false, isInterest: false },
   { slug: 'autres_revenus', kind: 'income', isEssential: false, isInterest: false },
   { slug: 'interets', kind: 'income', isEssential: false, isInterest: true },
-  { slug: 'logement', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'energie', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'alimentation', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'transport', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'sante', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'telecom', kind: 'expense', isEssential: true, isInterest: false },
-  { slug: 'restaurants', kind: 'expense', isEssential: false, isInterest: false },
-  { slug: 'dons', kind: 'expense', isEssential: false, isInterest: false },
-  { slug: 'divers', kind: 'expense', isEssential: false, isInterest: false },
+  { slug: 'logement', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'fixed' },
+  { slug: 'energie', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'fixed' },
+  { slug: 'alimentation', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'variable' },
+  { slug: 'transport', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'variable' },
+  { slug: 'sante', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'variable' },
+  { slug: 'telecom', kind: 'expense', isEssential: true, isInterest: false, defaultNature: 'fixed' },
+  { slug: 'restaurants', kind: 'expense', isEssential: false, isInterest: false, defaultNature: 'variable' },
+  { slug: 'dons', kind: 'expense', isEssential: false, isInterest: false, defaultNature: 'variable' },
+  { slug: 'divers', kind: 'expense', isEssential: false, isInterest: false, defaultNature: 'variable' },
   { slug: 'epargne', kind: 'transfer', isEssential: false, isInterest: false },
   { slug: 'virement_interne', kind: 'transfer', isEssential: false, isInterest: false },
 ];
@@ -68,6 +68,14 @@ export function getDemoHousehold(): HouseholdData {
       { categorySlug: 'logement', limitCents: 105_000 },
       { categorySlug: 'energie', limitCents: 15_000 },
       { categorySlug: 'transport', limitCents: 5_000 },
+    ],
+    // Plafonds fixés en août 2026 et reconduits (dépassements répétés visibles en démonstration)
+    budgetHistory: [
+      { month: '2026-08', categorySlug: 'alimentation', limitCents: 45_000 },
+      { month: '2026-08', categorySlug: 'restaurants', limitCents: 4_000 },
+      { month: '2026-08', categorySlug: 'logement', limitCents: 105_000 },
+      { month: '2026-08', categorySlug: 'energie', limitCents: 15_000 },
+      { month: '2026-08', categorySlug: 'transport', limitCents: 5_000 },
     ],
     goals: DEMO_GOALS,
     allocations: DEMO_ALLOCATIONS,

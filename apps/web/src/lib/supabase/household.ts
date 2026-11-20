@@ -43,9 +43,9 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   }
 
   const q = await Promise.all([
-    supabase.from('accounts').select('id, name, type, currency, iban_last4, opening_balance_cents, archived').eq('household_id', hid),
+    supabase.from('accounts').select('id, name, type, currency, iban_last4, opening_balance_cents, archived, counts_as_reserve').eq('household_id', hid),
     supabase.from('account_balances').select('account_id, balance_cents').eq('household_id', hid),
-    supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id, label'),
+    supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id, label, default_nature'),
     supabase.from('budgets').select('category_slug, limit_cents, month').eq('household_id', hid).gte('month', since),
     supabase.from('goals').select('id, kind, name, target_cents, target_date, status, monthly_capacity_cents').eq('household_id', hid).order('created_at'),
     supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on').eq('household_id', hid),
@@ -55,6 +55,10 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     // Réglages Zakat : ceux de la personne connectée (migration 0011), visibles seulement avec le consentement article 9
     supabase.from('zakat_settings').select('nisab_basis, year_basis, hawl_date, options').eq('household_id', hid).eq('owner_id', auth.user.id).maybeSingle(),
     supabase.from('purification_items').select('id, credited_cents, amount_to_purify_cents, status').eq('household_id', hid).limit(2000),
+    // Sprint 3 : choix du foyer et décisions personnelles sur les recommandations
+    supabase.from('household_category_settings').select('category_slug, nature').eq('household_id', hid),
+    supabase.from('recurring_feedback').select('series_key').eq('household_id', hid),
+    supabase.from('recommendation_feedback').select('fingerprint, status, snooze_until').eq('household_id', hid).eq('user_id', auth.user.id),
   ]);
   const failed = q.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -79,5 +83,10 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     id: r.id, creditedCents: Number(r.credited_cents), status: r.status,
     amountToPurifyCents: r.amount_to_purify_cents === null ? null : Number(r.amount_to_purify_cents),
   }));
+  data.natureOverrides = Object.fromEntries(((q[11].data ?? []) as Array<{ category_slug: string; nature: 'fixed' | 'variable' }>).map((r) => [r.category_slug, r.nature]));
+  data.notRecurring = ((q[12].data ?? []) as Array<{ series_key: string }>).map((r) => r.series_key);
+  // Une recommandation reportée réapparaît à la date choisie
+  data.hiddenRecommendations = ((q[13].data ?? []) as Array<{ fingerprint: string; status: string; snooze_until: string | null }>)
+    .filter((r) => r.status !== 'snoozed' || (r.snooze_until !== null && r.snooze_until > asOf)).map((r) => r.fingerprint);
   return data;
 }

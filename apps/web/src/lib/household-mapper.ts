@@ -3,14 +3,14 @@
  * structures des moteurs. Fonctions pures : testées sans base ni réseau.
  */
 import type {
-  CategoryInfo, Goal, GoalAllocation, MetalPrice, Transaction, ZakatAsset, ZakatLiability, ZakatOptions,
+  AnalysisCategory, Goal, GoalAllocation, MetalPrice, Transaction, ZakatAsset, ZakatLiability, ZakatOptions,
 } from '@amanah/engines';
 import type { HouseholdAccount, HouseholdData } from './snapshot.ts';
 
 // --- Lignes de la base (sous-ensemble des colonnes lues) ----------------------
-export interface AccountRow { id: string; name: string; type: string; currency: string; iban_last4: string | null; opening_balance_cents: number | string; archived: boolean }
+export interface AccountRow { id: string; name: string; type: string; currency: string; iban_last4: string | null; opening_balance_cents: number | string; archived: boolean; counts_as_reserve?: boolean | null }
 export interface TransactionRow { id: string; account_id: string; booked_on: string; amount_cents: number | string; currency: string; description: string; counterparty_name: string | null; category_slug: string | null; is_interest: boolean }
-export interface CategoryRow { slug: string; kind: 'income' | 'expense' | 'transfer'; is_essential: boolean; is_interest: boolean; household_id: string | null; label?: string | null }
+export interface CategoryRow { slug: string; kind: 'income' | 'expense' | 'transfer'; is_essential: boolean; is_interest: boolean; household_id: string | null; label?: string | null; default_nature?: 'fixed' | 'variable' | null }
 export interface BudgetRow { category_slug: string; limit_cents: number | string; month: string }
 export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string; monthly_capacity_cents?: number | string | null }
 export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string }
@@ -51,6 +51,7 @@ export function accountBalances(accounts: AccountRow[], txs: Array<Pick<Transact
   for (const t of txs) sums.set(t.account_id, (sums.get(t.account_id) ?? 0) + toCents(t.amount_cents));
   return accounts.filter((a) => !a.archived).map((a) => ({
     id: a.id, name: a.name, type: a.type, ibanLast4: a.iban_last4 ?? undefined,
+    ...(a.counts_as_reserve !== undefined ? { countsAsReserve: a.counts_as_reserve } : {}),
     balanceCents: fromDb?.has(a.id) ? toCents(fromDb.get(a.id)) : toCents(a.opening_balance_cents) + (sums.get(a.id) ?? 0),
   }));
 }
@@ -83,9 +84,9 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
   const month = `${rows.asOf.slice(0, 7)}-01`;
 
   // Catégories du foyer prioritaires sur les catégories système de même code
-  const cats = new Map<string, CategoryInfo>();
+  const cats = new Map<string, AnalysisCategory>();
   for (const c of [...rows.categories].sort((a, b) => (a.household_id === null ? -1 : 1) - (b.household_id === null ? -1 : 1))) {
-    cats.set(c.slug, { slug: c.slug, kind: c.kind, isEssential: c.is_essential, isInterest: c.is_interest, label: c.label ?? undefined });
+    cats.set(c.slug, { slug: c.slug, kind: c.kind, isEssential: c.is_essential, isInterest: c.is_interest, label: c.label ?? undefined, defaultNature: c.default_nature ?? undefined });
   }
 
   const transactions: Transaction[] = rows.transactions.map((t) => ({
@@ -119,6 +120,7 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
     transactions,
     categories: [...cats.values()],
     budget: rows.budgets.filter((b) => b.month === month).map((b) => ({ categorySlug: b.category_slug, limitCents: toCents(b.limit_cents) })),
+    budgetHistory: rows.budgets.map((b) => ({ month: b.month.slice(0, 7), categorySlug: b.category_slug, limitCents: toCents(b.limit_cents) })),
     goals: rows.goals.filter((g) => g.status !== 'archived').map((g) => ({
       id: g.id, kind: g.kind, name: g.name, targetCents: toCents(g.target_cents), targetDate: g.target_date,
       monthlyCapacityCents: g.monthly_capacity_cents === null || g.monthly_capacity_cents === undefined ? undefined : toCents(g.monthly_capacity_cents),

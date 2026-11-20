@@ -8,7 +8,8 @@ import { isDemoMode } from '@/lib/env';
 import { formatCents, formatDate, formatMonth } from '@/lib/format';
 import { categoryLabel, selectableCategories } from '@/lib/labels';
 import { fr } from '@/messages/fr';
-import { createCategory, createTransaction, deleteTransaction, saveBudget } from '../actions';
+import { createCategory, createTransaction, deleteTransaction, markNotRecurring, saveBudget, saveCategoryNature } from '../actions';
+import { IncomeExpenseChart } from '@/components/finance/charts';
 
 export const metadata: Metadata = { title: fr.budget.title };
 
@@ -26,6 +27,14 @@ export default async function BudgetPage() {
   return (
     <>
       <PageHeader title={fr.budget.title} subtitle={formatMonth(month.month)} />
+      <nav aria-label="Sections du budget" className="-mt-3 mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <a href="#ce-mois" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Ce mois</a>
+        <a href="#evolution" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Évolution</a>
+        <a href="#recurrentes" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Charges récurrentes</a>
+        <a href="#mes-donnees" className="rounded-full border border-line bg-paper px-3 py-1.5 hover:bg-mist">Mes données</a>
+        <Link href="/budget/optimiser" data-testid="lien-optimiser" className="ml-auto rounded-lg bg-primary-800 px-4 py-2 font-medium text-ivory hover:bg-primary-700">Optimiser mon budget</Link>
+      </nav>
+      <div id="ce-mois" />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><Stat label="Revenus du mois" value={formatCents(month.incomeCents)} tone="positive" /></Card>
@@ -129,6 +138,73 @@ export default async function BudgetPage() {
           </Card>
         </div>
       ) : null}
-    </>
+    
+      <Card className="mt-4">
+        <h2 id="evolution" className="mb-3 text-lg text-primary-900">Évolution sur {s.analysis.monthsWithData} mois complets</h2>
+        {s.analysis.months.length === 0 ? <p className="text-ink-muted">Pas encore de mois complet à comparer.</p> : (
+          <>
+            <IncomeExpenseChart months={s.analysis.months} />
+            {s.analysis.variance.filter((v) => v.overMonths > 0).length ? (
+              <ul className="mt-3 space-y-1 text-sm" data-testid="depassements">
+                {s.analysis.variance.filter((v) => v.overMonths > 0).map((v) => (
+                  <li key={v.categorySlug}><span className="font-medium">{categoryLabel(v.categorySlug, data.categories)}</span> : budget dépassé {v.overMonths} mois sur {v.months.length} (dépassement moyen {formatCents(v.averageOverrunCents)})</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <h2 id="recurrentes" className="mb-3 text-lg text-primary-900">Charges et revenus récurrents</h2>
+        {s.analysis.recurring.length === 0 ? <p className="text-ink-muted">Aucune opération récurrente détectée (il faut au moins 3 occurrences mensuelles).</p> : (
+          <ul className="divide-y divide-line" data-testid="liste-recurrentes">
+            {s.analysis.recurring.map((r) => (
+              <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="font-medium">{r.label} {r.active ? null : <span className="text-xs text-ink-muted">(plus observée récemment)</span>}</p>
+                  <p className="text-sm text-ink-muted">
+                    {{ income: 'Revenu récurrent', fixed_charge: 'Charge fixe', subscription: 'Abonnement', recurring_expense: 'Dépense régulière' }[r.kind]}
+                    {' · '}{r.cadence === 'monthly' ? 'mensuel' : 'annuel'} · prochaine échéance attendue le {formatDate(r.nextExpectedDate)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`tabular font-semibold ${r.direction === 'credit' ? 'text-positive' : ''}`}>{r.direction === 'credit' ? '+' : '−'}{formatCents(r.typicalAmountCents)}</span>
+                  {!isDemoMode ? (
+                    <ActionForm action={markNotRecurring} submitLabel="Pas récurrent" variant="quiet">
+                      <input type="hidden" name="seriesKey" value={r.key} />
+                    </ActionForm>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="mt-4">
+        <h2 id="mes-donnees" className="mb-3 text-lg text-primary-900">Mes données</h2>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <Link href="/comptes" className="rounded-lg border border-line px-3 py-2 font-medium text-primary-800 hover:bg-mist">Mes comptes</Link>
+          <Link href="/import" className="rounded-lg border border-line px-3 py-2 font-medium text-primary-800 hover:bg-mist">Importer un relevé CSV</Link>
+        </div>
+        {!isDemoMode ? (
+          <details className="mt-4 text-sm">
+            <summary className="cursor-pointer text-primary-700">Charges fixes ou variables : ajuster une catégorie</summary>
+            <p className="mt-2 text-ink-muted">Une charge fixe revient chaque mois pour un montant prévisible (loyer, énergie, abonnements). Ce choix affine votre capacité d’épargne estimée.</p>
+            <ActionForm action={saveCategoryNature} submitLabel="Enregistrer" variant="quiet" className="mt-2 grid gap-3 sm:grid-cols-2" testId="form-nature">
+              <SelectField label="Catégorie" name="categorySlug">
+                {expenseCats.map((c) => <option key={c.slug} value={c.slug}>{c.label}{data.natureOverrides?.[c.slug] ? ` (${data.natureOverrides[c.slug] === 'fixed' ? 'fixe' : 'variable'}, choisi)` : ''}</option>)}
+              </SelectField>
+              <SelectField label="Nature" name="nature" defaultValue="fixed">
+                <option value="fixed">Charge fixe</option>
+                <option value="variable">Dépense variable</option>
+                <option value="default">Nature par défaut</option>
+              </SelectField>
+            </ActionForm>
+          </details>
+        ) : null}
+      </Card>
+</>
   );
 }

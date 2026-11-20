@@ -113,3 +113,40 @@ export async function allocateToGoal(_p: FormState, fd: FormData): Promise<FormS
   });
   return error ? dbError('allocation', error) : done(amount > 0 ? 'Montant affecté à l’objectif.' : 'Montant retiré de l’objectif.');
 }
+
+// --- Sprint 3 : choix du foyer pour l'analyse ------------------------------------
+/** « Ce n'est pas une dépense récurrente » : la série n'est plus détectée pour ce foyer. */
+export async function markNotRecurring(_prev: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const key = String(fd.get('seriesKey') ?? '');
+  if (key.length < 3 || key.length > 120) return formError('Série invalide.');
+  const { error } = await ctx.supabase.from('recurring_feedback')
+    .upsert({ household_id: ctx.householdId, series_key: key }, { onConflict: 'household_id,series_key', ignoreDuplicates: true });
+  if (error) return dbError('recurring feedback', error);
+  return done('Cette opération ne sera plus considérée comme récurrente.');
+}
+
+/** Nature fixe ou variable d'une catégorie pour ce foyer (« default » : nature du référentiel). */
+export async function saveCategoryNature(_prev: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const slug = String(fd.get('categorySlug') ?? '');
+  const nature = String(fd.get('nature') ?? '');
+  if (!/^[a-z0-9_-]{2,60}$/.test(slug) || !['fixed', 'variable', 'default'].includes(nature)) return formError('Choix invalide.');
+  const { error } = nature === 'default'
+    ? await ctx.supabase.from('household_category_settings').delete().eq('household_id', ctx.householdId).eq('category_slug', slug)
+    : await ctx.supabase.from('household_category_settings')
+      .upsert({ household_id: ctx.householdId, category_slug: slug, nature }, { onConflict: 'household_id,category_slug' });
+  if (error) return dbError('category nature', error);
+  return done('Nature de la catégorie enregistrée.');
+}
+
+/** Compte retenu (ou non) pour la réserve de précaution. */
+export async function setAccountReserve(_prev: FormState, fd: FormData): Promise<FormState> {
+  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const id = String(fd.get('accountId') ?? '');
+  const value = fd.get('reserve');
+  if (!/^[0-9a-f-]{36}$/i.test(id) || (value !== 'yes' && value !== 'no')) return formError('Choix invalide.');
+  const { error } = await ctx.supabase.from('accounts').update({ counts_as_reserve: value === 'yes' }).eq('id', id).eq('household_id', ctx.householdId);
+  if (error) return dbError('account reserve', error);
+  return done(value === 'yes' ? 'Compte compté dans votre réserve de précaution.' : 'Compte retiré de votre réserve de précaution.');
+}

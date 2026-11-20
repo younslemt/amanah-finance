@@ -3,7 +3,7 @@
  * Seuls les chemins internes de l'application sont acceptés : pas d'URL absolue,
  * pas de « //hote », pas de barre oblique inverse, pas de caractère de contrôle.
  */
-const ALLOWED_PREFIXES = ['/dashboard', '/budget', '/goals', '/zakat', '/purification', '/wealth', '/comptes', '/parametres', '/bienvenue', '/reinitialiser'];
+const ALLOWED_PREFIXES = ['/dashboard', '/budget', '/goals', '/zakat', '/purification', '/wealth', '/comptes', '/parametres', '/bienvenue', '/reinitialiser', '/recommandations', '/import', '/finance-islamique'];
 export const DEFAULT_AFTER_LOGIN = '/dashboard';
 
 export function safeRedirectPath(input: string | null | undefined): string {

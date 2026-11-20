@@ -13,7 +13,8 @@ export const fr = {
   nav: {
     dashboard: 'Accueil',
     budget: 'Budget',
-    goals: 'Objectifs',
+    goals: 'Projets',
+    islamicFinance: 'Finance islamique',
     zakat: 'Zakat',
     purification: 'Purification',
     wealth: 'Patrimoine',

@@ -3,20 +3,29 @@
  * Fonction pure, sans React ni Supabase : testable seule et réutilisable en natif.
  */
 import {
+  analyzeFinances, recommend, type AnalysisBudget, type AnalysisCategory, type CategoryNature, type FinancialAnalysis, type Recommendation,
   calculateZakat, computeNetWorth, detectInterest, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
-  type CategoryInfo, type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
+  type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
   summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
   type ZakatOptions, type ZakatResult,
 } from '@amanah/engines';
 
-export interface HouseholdAccount { id: string; name: string; type: string; balanceCents: number; ibanLast4?: string }
+export interface HouseholdAccount { id: string; name: string; type: string; balanceCents: number; ibanLast4?: string; countsAsReserve?: boolean | null }
 
 export interface HouseholdData {
   asOf: string;
   accounts: HouseholdAccount[];
   transactions: Transaction[];
-  categories: CategoryInfo[];
+  categories: AnalysisCategory[];
   budget: Array<{ categorySlug: string; limitCents: number }>;
+  /** Plafonds de tous les mois chargés (dépassements répétés, budget reconduit). */
+  budgetHistory?: AnalysisBudget[];
+  /** Nature fixe / variable choisie par le foyer. */
+  natureOverrides?: Record<string, CategoryNature>;
+  /** Séries écartées par le foyer (« pas une dépense récurrente »). */
+  notRecurring?: string[];
+  /** Recommandations écartées, faites ou reportées par la personne connectée. */
+  hiddenRecommendations?: string[];
   goals: Goal[];
   allocations: GoalAllocation[];
   /** Tous les actifs, y compris les soldes de comptes (voir accountsToAssets). */
@@ -40,6 +49,9 @@ export interface HouseholdSnapshot {
   goals: Array<{ goal: Goal; plan: GoalPlan }>;
   zakat: ZakatResult;
   purification: { candidates: PurificationCandidate[]; detectedCreditedCents: number; summary: PurificationSummary | null };
+  /** Analyse financière des mois complets (Sprint 3). */
+  analysis: FinancialAnalysis;
+  recommendations: Recommendation[];
 }
 
 const LIQUID = new Set(['current', 'savings', 'regulated_savings', 'cash']);
@@ -92,6 +104,21 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
 
   const candidates = detectInterest(data.transactions);
 
+  const analysis = analyzeFinances({
+    asOf: data.asOf,
+    transactions: data.transactions,
+    categories: data.categories,
+    budgets: data.budgetHistory ?? data.budget.map((b) => ({ ...b, month: currentMonth })),
+    accounts: data.accounts.map((a) => ({ id: a.id, type: a.type, balanceCents: a.balanceCents, countsAsReserve: a.countsAsReserve })),
+    natureOverrides: data.natureOverrides,
+    notRecurring: new Set(data.notRecurring ?? []),
+    reserveMonths: data.emergencyFundMonths,
+  });
+  const recommendations = recommend({
+    analysis, hidden: new Set(data.hiddenRecommendations ?? []),
+    goals: goals.map((g) => ({ ...g, paceCents: observedMonthlyPace(data.allocations, g.goal.id, data.asOf) })),
+  });
+
   return {
     asOf: data.asOf,
     isEmpty: data.accounts.length === 0 && data.transactions.length === 0 && data.goals.length === 0 && data.assets.length === 0,
@@ -103,5 +130,7 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     goals,
     zakat,
     purification: { candidates, detectedCreditedCents: candidates.reduce((s, c) => s + c.creditedCents, 0), summary: data.purificationItems ? summarizePurification(data.purificationItems) : null },
+    analysis,
+    recommendations,
   };
 }
