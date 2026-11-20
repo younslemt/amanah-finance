@@ -1,6 +1,6 @@
 # Amanah Finance — évolution produit : Financial Wellness & Ethical Life Planning
 
-**Statut** : cadrage produit et technique. Aucun développement engagé. Le Sprint 2 (PR #12) n'est pas modifié.
+**Statut** : vision validée par le fondateur le 20 novembre 2026. Sprint 3 réalisé (`SPRINT-3.md`) ; Sprints 4 à 6 non commencés.
 **Principe** : l'excellence de la gestion financière est le cœur du produit ; l'identité islamique est la
 différenciation. Tous les chiffres viennent de moteurs déterministes et testés, jamais d'un LLM.
 
