@@ -79,6 +79,8 @@ export function ActionForm({
       const all = steps();
       const idx = all.findIndex((f) => Array.from(f.querySelectorAll<HTMLInputElement>('input, select, textarea')).some((x) => !x.checkValidity()));
       if (idx >= 0) {
+        const bad = Array.from(all[idx]!.querySelectorAll<HTMLInputElement>('input, select, textarea')).find((x) => !x.checkValidity());
+        e.currentTarget.dataset.envoiBloque = `${bad?.name ?? '?'}:${bad?.validationMessage ?? ''}:${bad?.value ?? ''}`;
         setStep(idx);
         requestAnimationFrame(() => Array.from(steps()[idx]?.querySelectorAll<HTMLInputElement>('input, select, textarea') ?? []).find((x) => !x.checkValidity())?.reportValidity());
         return;
@@ -94,7 +96,7 @@ export function ActionForm({
     quiet: 'border border-line bg-paper text-ink hover:bg-mist',
   }[variant];
   return (
-    <form ref={formRef} action={formAction} onSubmit={onSubmit} className={cn('space-y-3', className)} data-testid={testId} noValidate>
+    <form ref={formRef} action={formAction} onSubmit={onSubmit} className={cn('space-y-3', className)} data-testid={testId} data-etape={wizard && step !== null ? step : undefined} noValidate>
       {state.status === 'error' ? (
         <div role="alert" className="rounded-lg border border-[#f0d3cd] bg-[#fbeeeb] p-3 text-sm text-critical sm:col-span-2">
           {state.message ? <p className="font-medium">{state.message}</p> : null}

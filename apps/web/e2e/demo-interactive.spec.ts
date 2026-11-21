@@ -28,6 +28,8 @@ test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
   const state = await page.evaluate(() => ({
     url: location.href,
+    formulaires: Array.from(document.querySelectorAll('form')).map((f) => `${f.dataset.testid ?? ''} étape=${f.dataset.etape ?? '-'} bloqué=${f.dataset.envoiBloque ?? '-'}`),
+    champs: Array.from(document.querySelectorAll('[data-testid="form-objectif"] input:not([type=hidden])')).map((i) => `${(i as HTMLInputElement).name}=${(i as HTMLInputElement).type === 'radio' ? (i as HTMLInputElement).checked : (i as HTMLInputElement).value}`).filter((x) => !x.endsWith('=false')),
     erreurPage: !!document.querySelector('[data-testid="erreur-page"]'),
     alertes: Array.from(document.querySelectorAll('[role="alert"]')).map((a) => a.textContent?.slice(0, 200)),
     boutons: Array.from(document.querySelectorAll('form button')).map((b) => `${b.textContent}|${(b as HTMLButtonElement).type}|${(b as HTMLButtonElement).disabled}`).slice(0, 12),
