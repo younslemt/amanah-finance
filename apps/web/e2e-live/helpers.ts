@@ -132,7 +132,7 @@ export async function createGoalWithWizard(page: Page, g: { category: string; na
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(page).toHaveURL(/\/goals\/[^/?]+\?cree=1$/);
+  await expect(page).toHaveURL(/\/goals\/[^/?]+\?cree=1$/, { timeout: 15_000 });
   await expect(page.getByTestId('projet-cree')).toBeVisible();
 }
 

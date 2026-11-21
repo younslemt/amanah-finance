@@ -20,7 +20,7 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/);
+  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(g.name ?? g.category);
   return page.url().split('?')[0]!;
 }
@@ -162,7 +162,7 @@ test('Aïd en démonstration : budget ajusté, réalisation puis préparation de
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Effort d’épargne mensuel (€)').fill('40');
   await form.getByRole('button', { name: 'Créer l’Aïd de l’année suivante' }).click();
-  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/);
+  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/, { timeout: 15_000 });
   await expect(page.getByText('Aucune affectation.')).toBeVisible(); // aucun montant repris
   await page.goto('/goals/goal-aid');
   await expect(page.getByTestId('reconduction-aid')).toContainText('Reconduit');

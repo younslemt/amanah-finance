@@ -85,3 +85,18 @@ Les Sprints 6 et 7 n’ont pas été commencés. Moteurs réutilisés : `goals`,
 | Playwright réel (Supabase local), mobile et ordinateur | 68 réussis |
 
 Non vérifié : lancement sous Windows (voir `docs/LANCEMENT-WINDOWS.md`), installation sur un vrai smartphone, déploiement (non autorisé).
+
+## Revue produit — démonstration interactive (après la recette)
+
+Détails complets : `docs/DEMO-INTERACTIVE.md`.
+
+- **Audit** : en démonstration, la création, la modification, les affectations, le cycle de vie, l’historique, l’Aïd et le plan d’épargne étaient désactivés. Par ailleurs, les projets archivés disparaissaient, y compris en mode réel.
+- **Parcours** : il était fondé sur la présence de données. Un projet tout juste créé apparaissait « à réaliser ». Désormais, une étape n’est franchie que par une décision (plan validé, stratégie retenue, mise de côté enregistrée, réalisation). Chaque étape est faite, disponible ou en attente, avec une action conseillée. Migration `0021`.
+- **Stockage interchangeable** : `GoalRepository`, avec un adaptateur de démonstration (état fictif dans le navigateur, sans base) et un adaptateur Supabase (RLS, fonctions SQL et article 9 inchangés).
+- **Expérience** :
+  - assistant « Ajouter un objectif » en 3 écrans, avec retour en arrière sans perte de saisie ;
+  - catégories présentées en cartes ;
+  - projet personnel au nom libre ;
+  - simulateur multi-scénarios tenant compte des autres projets ;
+  - point d’intégration « Explorer les solutions », sans aucun partenaire.
+- **Correction annexe** : le test e2e Sprint 3 dépendait du jour d’exécution. L’abonnement fictif du 6 du mois devenait « inactif » après le 21. Il ne dépend plus de la date.
