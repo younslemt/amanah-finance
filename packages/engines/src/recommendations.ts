@@ -1,5 +1,5 @@
 /**
- * Recommendation Engine (Sprint 3, lot 3.3) : règles déterministes R1 à R6.
+ * Recommendation Engine (Sprint 3, lot 3.3 ; R7 au Sprint 5) : règles déterministes R1 à R7.
  *
  * Chaque recommandation est structurée (codes et montants, pas de phrases) : l'interface
  * en fait des textes. Aucune ne nomme ni ne conseille un produit financier : il s'agit
@@ -12,9 +12,10 @@ import type { Cents } from './money.ts';
 import { divRoundHalfEven } from './money.ts';
 import type { FinancialAnalysis } from './analysis.ts';
 import { allocateShortfalls } from './optimization.ts';
-import type { Goal, GoalPlan } from './goals.ts';
+import { isPlannable, simulateGoalPace, type Goal, type GoalAllocation, type GoalPlan } from './goals.ts';
+import type { IsoDate } from './dates.ts';
 
-export type RuleId = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6';
+export type RuleId = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R7';
 export type Severity = 'critical' | 'high' | 'medium' | 'info';
 
 export interface DataPoint {
@@ -76,21 +77,78 @@ export interface RecommendationInput {
   goals: ReadonlyArray<{ goal: Goal; plan: GoalPlan; /** Rythme observé des affectations, si connu. */ paceCents?: Cents }>;
   /** Empreintes écartées, faites ou reportées par l'utilisateur. */
   hidden?: ReadonlySet<string>;
+  /** R7 : date du jour et affectations, pour chiffrer les scénarios de rattrapage. */
+  asOf?: IsoDate;
+  allocations?: readonly GoalAllocation[];
 }
 
-export function recommend({ analysis, goals, hidden = new Set() }: RecommendationInput): Recommendation[] {
+/**
+ * R7 — projet en retard. Données de l'utilisateur seulement (cible, mis de côté, date,
+ * rythme déclaré ou observé) : indépendant de l'historique bancaire. Aucune date n'est
+ * promise sans rythme (rythme inconnu ou nul : pas de date estimée).
+ */
+function lateGoals(input: RecommendationInput): Omit<Recommendation, 'rank'>[] {
+  const out: Omit<Recommendation, 'rank'>[] = [];
+  for (const { goal, plan, paceCents } of input.goals) {
+    if (!isPlannable(goal) || (plan.status !== 'behind' && plan.status !== 'overdue')) continue;
+    const pace = goal.monthlyCapacityCents ?? paceCents;
+    if (pace === undefined) continue; // rythme inconnu : on ne conclut pas
+    const extra = Math.max(0, plan.monthlyRequiredCents - pace);
+    const delay = plan.projectedMonthsAtCurrentPace === null ? null : Math.max(0, plan.projectedMonthsAtCurrentPace - Math.max(0, plan.monthsLeft));
+    const reachable = plan.savedCents + pace * Math.max(0, plan.monthsLeft);
+    const corrected = input.asOf && input.allocations ? simulateGoalPace(goal, input.allocations, input.asOf, pace + extra) : null;
+    out.push({
+      ruleId: 'R7', fingerprint: `R7:${goal.id}:${bucket(extra, 2_500)}:${plan.status}`,
+      severity: plan.status === 'overdue' ? 'high' : 'medium', subject: goal.id,
+      finding: { code: 'goal_late', params: {
+        goalName: goal.name, targetDate: goal.targetDate, projectedDate: plan.projectedCompletionDate ?? '',
+        delayMonths: delay ?? -1, overdue: plan.status === 'overdue' ? 1 : 0, remainingCents: plan.remainingCents,
+      } },
+      data: [
+        { code: 'goal_target', value: goal.targetCents, unit: 'cents', source: 'goal' },
+        { code: 'goal_saved', value: plan.savedCents, unit: 'cents', source: 'goal_allocations' },
+        { code: 'goal_pace', value: pace, unit: 'cents', source: goal.monthlyCapacityCents !== undefined ? 'goal_declared_pace' : 'goal_observed_pace' },
+        { code: 'goal_required', value: plan.monthlyRequiredCents, unit: 'cents', source: 'goal' },
+        { code: 'goal_months_left', value: Math.max(0, plan.monthsLeft), unit: 'months', source: 'goal' },
+      ],
+      proposal: { code: 'catch_up_goal', params: {
+        extraMonthlyCents: extra, newMonthlyCents: pace + extra,
+        laterDate: plan.projectedCompletionDate ?? '', reachableCents: Math.min(goal.targetCents, reachable),
+        correctedDate: corrected?.projectedCompletionDate ?? '',
+      } },
+      impact: null,
+      action: { code: 'open_goal', href: `/goals/${encodeURIComponent(goal.id)}` },
+    });
+  }
+  return out;
+}
+
+const ranked = (list: Omit<Recommendation, 'rank'>[], hidden: ReadonlySet<string>): Recommendation[] => list
+  .filter((r) => !hidden.has(r.fingerprint))
+  .sort((x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity]
+    || (y.impact?.annualCents ?? 0) - (x.impact?.annualCents ?? 0)
+    || (x.ruleId < y.ruleId ? -1 : x.ruleId > y.ruleId ? 1 : 0))
+  .map((r, i) => ({ ...r, rank: i + 1 }));
+
+export function recommend(input: RecommendationInput): Recommendation[] {
+  const { analysis, hidden = new Set() } = input;
+  // Seuls les projets actifs comptent (en pause ou réalisés : hors planification)
+  const goals = input.goals.filter((g) => isPlannable(g.goal));
+  const r7 = lateGoals({ ...input, goals });
   const a = analysis;
   const out: Omit<Recommendation, 'rank'>[] = [];
   const src = `analysis_${a.monthsWithData}_months`;
 
   if (a.reliability === 'insufficient') {
-    return [{
+    const r0: Omit<Recommendation, 'rank'> = {
       ruleId: 'R0', fingerprint: `R0:${a.monthsWithData}`, severity: 'info', subject: null,
       finding: { code: 'insufficient_data', params: { months: a.monthsWithData, required: 3 } },
       data: [{ code: 'complete_months', value: a.monthsWithData, unit: 'months', source: 'transactions' }],
       proposal: { code: 'import_more_history', params: { required: 3 } },
-      impact: null, action: { code: 'import', href: '/import' }, rank: 1,
-    }];
+      impact: null, action: { code: 'import', href: '/import' },
+    };
+    // R0 reste affichée ; R7 ne dépend que des données des projets
+    return [{ ...r0, rank: 1 }, ...ranked(r7, hidden).map((r, i) => ({ ...r, rank: i + 2 }))];
   }
   const cap = a.capacity;
   const months = a.months.filter((m) => m.complete);
@@ -213,10 +271,5 @@ export function recommend({ analysis, goals, hidden = new Set() }: Recommendatio
     });
   }
 
-  return out
-    .filter((r) => !hidden.has(r.fingerprint))
-    .sort((x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity]
-      || (y.impact?.annualCents ?? 0) - (x.impact?.annualCents ?? 0)
-      || (x.ruleId < y.ruleId ? -1 : x.ruleId > y.ruleId ? 1 : 0))
-    .map((r, i) => ({ ...r, rank: i + 1 }));
+  return ranked([...out, ...r7], hidden);
 }

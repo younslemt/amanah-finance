@@ -30,7 +30,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ['@amanah/engines', '@amanah/banking'],
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // Le service worker doit toujours être revalidé (mise à jour immédiate des règles de cache)
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Content-Type', value: 'application/javascript; charset=utf-8' }] },
+    ];
   },
 };
 

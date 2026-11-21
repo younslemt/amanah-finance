@@ -31,7 +31,9 @@ test.describe.serial('Sprint 2 — consentement, import et purification', () => 
       await page.goto(path);
       await expect(page.getByTestId('lien-activer-finance-islamique'), path).toBeVisible();
     }
-    await expect(page.getByTestId('form-hajj')).toHaveCount(0);
+    await page.goto('/goals/nouveau');
+    await expect(page.getByTestId('form-objectif').getByRole('radio')).not.toHaveCount(0);
+    await expect(page.getByTestId('form-objectif').getByRole('radio', { name: /^(Hajj|Omra)/ })).toHaveCount(0);
     // Côté base : écriture religieuse refusée sans consentement
     const token = await apiToken(C);
     const [h] = (await (await rest(token, 'households?select=id')).json()) as Array<{ id: string }>;

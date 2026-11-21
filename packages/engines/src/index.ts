@@ -4,6 +4,8 @@ export * from './text.ts';
 export * from './transactions.ts';
 export * from './budget.ts';
 export * from './goals.ts';
+export * from './eid.ts';
+export * from './planning.ts';
 export * from './purification.ts';
 export * from './csv.ts';
 export * from './wealth.ts';

@@ -14,6 +14,8 @@ export class NotAuthenticatedError extends Error {
 }
 
 const HISTORY_MONTHS = 6;
+/** Colonnes d'un projet, décisions du parcours comprises (migration 0021). */
+export const GOAL_COLUMNS = 'id, kind, name, target_cents, target_date, status, monthly_capacity_cents, priority, realized_on, plan_confirmed_on, strategy_monthly_cents, strategy_chosen_on';
 
 export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   const supabase = await createSupabaseServerClient();
@@ -47,8 +49,8 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('account_balances').select('account_id, balance_cents').eq('household_id', hid),
     supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id, label, default_nature'),
     supabase.from('budgets').select('category_slug, limit_cents, month').eq('household_id', hid).gte('month', since),
-    supabase.from('goals').select('id, kind, name, target_cents, target_date, status, monthly_capacity_cents').eq('household_id', hid).order('created_at'),
-    supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on').eq('household_id', hid),
+    supabase.from('goals').select(GOAL_COLUMNS).eq('household_id', hid).order('created_at'),
+    supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on, source').eq('household_id', hid),
     supabase.from('assets').select('id, kind, name, value_cents, weight_mg, purity_permille, is_accessible, receivable_likely, account_id, details').eq('household_id', hid),
     supabase.from('liabilities').select('id, name, outstanding_cents, due_12m_cents').eq('household_id', hid),
     supabase.from('market_prices').select('symbol, price_per_g_cents, as_of, source').eq('currency', 'EUR').order('as_of', { ascending: false }).limit(20),
@@ -63,6 +65,7 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     // Sprint 4 : prix des métaux saisis par la personne (article 9 : vides sans consentement)
     supabase.from('zakat_metal_prices').select('symbol, price_per_g_cents, as_of, source').eq('household_id', hid).eq('owner_id', auth.user.id)
       .order('as_of', { ascending: false }).limit(40),
+    supabase.from('household_savings_settings').select('declared_capacity_cents').eq('household_id', hid).maybeSingle(),
   ]);
   const failed = q.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -91,6 +94,8 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   data.notRecurring = ((q[12].data ?? []) as Array<{ series_key: string }>).map((r) => r.series_key);
   data.transferDecisions = ((q[14].data ?? []) as Array<{ debit_id: string; credit_id: string; verdict: 'confirmed' | 'rejected' }>)
     .map((r) => [`${r.debit_id}|${r.credit_id}`, r.verdict] as [string, 'confirmed' | 'rejected']);
+  const declared = (q[16].data as { declared_capacity_cents: number | string | null } | null)?.declared_capacity_cents;
+  data.declaredSavingsCapacityCents = declared === null || declared === undefined ? null : Number(declared);
   // Une recommandation reportée réapparaît à la date choisie
   data.hiddenRecommendations = ((q[13].data ?? []) as Array<{ fingerprint: string; status: string; snooze_until: string | null }>)
     .filter((r) => r.status !== 'snoozed' || (r.snooze_until !== null && r.snooze_until > asOf)).map((r) => r.fingerprint);

@@ -5,6 +5,7 @@ import { isDemoMode } from './env.ts';
 import { getDemoHousehold } from './demo.ts';
 import { buildSnapshot, type HouseholdSnapshot, type HouseholdData } from './snapshot.ts';
 import { loadHouseholdData, NotAuthenticatedError } from './supabase/household.ts';
+import { readDemoState } from './goals/demo-repository.ts';
 
 /** Date du jour à Bruxelles (les moteurs reçoivent la date, ils ne lisent pas l'horloge). */
 export function todayInBrussels(): string {
@@ -13,11 +14,11 @@ export function todayInBrussels(): string {
 
 /**
  * Point d'entrée unique des écrans.
- * - démo : données fictives, jamais de Supabase.
+ * - démo : données fictives, jamais de Supabase ; projets modifiables (état conservé dans le navigateur).
  * - live : données de l'utilisateur connecté, jamais de données fictives.
  */
 export const getHouseholdData = cache(async (): Promise<HouseholdData> => {
-  if (isDemoMode) return getDemoHousehold();
+  if (isDemoMode) return getDemoHousehold((await readDemoState()).state);
   try {
     return await loadHouseholdData(todayInBrussels());
   } catch (e) {
