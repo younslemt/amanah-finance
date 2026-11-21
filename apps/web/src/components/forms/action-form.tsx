@@ -96,16 +96,18 @@ export function ActionForm({
       {children}
       <div className="flex flex-wrap gap-2 sm:col-span-2">
         {wizard && step !== null && step > 0 ? (
-          <button type="button" onClick={goBack} className="rounded-lg border border-line bg-paper px-4 py-2.5 text-sm font-medium hover:bg-mist" data-testid="etape-precedente">
+          <button key="precedent" type="button" onClick={goBack} className="rounded-lg border border-line bg-paper px-4 py-2.5 text-sm font-medium hover:bg-mist" data-testid="etape-precedente">
             ← Précédent
           </button>
         ) : null}
         {wizard && !isLast ? (
-          <button type="button" onClick={goNext} className={cn('rounded-lg px-4 py-2.5 text-sm font-medium', buttonClass)} data-testid="etape-suivante">
+          // Clés distinctes : React ne doit jamais transformer le bouton « Suivant » cliqué en bouton
+          // d'envoi (le navigateur enverrait alors le formulaire avant la dernière saisie)
+          <button key="suivant" type="button" onClick={goNext} className={cn('rounded-lg px-4 py-2.5 text-sm font-medium', buttonClass)} data-testid="etape-suivante">
             Suivant →
           </button>
         ) : (
-          <button type="submit" disabled={pending}
+          <button key="envoyer" type="submit" disabled={pending}
             className={cn('rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-60', buttonClass)}>
             {pending ? 'Enregistrement…' : submitLabel}
           </button>

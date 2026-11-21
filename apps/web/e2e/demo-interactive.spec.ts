@@ -17,6 +17,9 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Montant cible (€)').fill(g.target);
   await form.getByTestId('etape-suivante').click();
+  // Arriver à la dernière étape n'envoie jamais le formulaire (aucune erreur avant la saisie)
+  await expect(form.getByRole('button', { name: 'Créer l’objectif' })).toBeVisible();
+  await expect(form.getByRole('alert')).toHaveCount(0);
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
