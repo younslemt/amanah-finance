@@ -73,7 +73,7 @@ for (const s of SCREENS) {
     expect(overflow, 'défilement horizontal').toBeLessThanOrEqual(0);
     expect(await contrastFailures(page)).toEqual([]);
     expect(errors).toEqual([]);
-    await page.screenshot({ path: test.info().outputPath(`${s.path.slice(1)}.png`), fullPage: true });
+    await page.screenshot({ path: test.info().outputPath(`${s.path.slice(1).replace(/[^a-z0-9/-]/gi, '_')}.png`), fullPage: true });
   });
 }
 
