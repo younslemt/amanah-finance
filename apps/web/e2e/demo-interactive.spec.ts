@@ -23,7 +23,9 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/, { timeout: 15_000 });
+  await Promise.race([page.waitForURL(/cree=1/, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined)]);
+  expect(await form.getByRole('alert').allTextContents(), 'erreur affichée par le formulaire').toEqual([]);
+  await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(g.name ?? g.category);
   return page.url().split('?')[0]!;
 }

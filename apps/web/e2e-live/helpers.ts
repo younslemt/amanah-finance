@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 
 /** Environnement fourni par le job CI (sortie de `supabase status`). */
 export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? 'http://127.0.0.1:54321';
@@ -132,7 +132,7 @@ export async function createGoalWithWizard(page: Page, g: { category: string; na
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(page).toHaveURL(/\/goals\/[^/?]+\?cree=1$/, { timeout: 15_000 });
+  await expectRedirectOrShowError(page, form, /\/goals\/[^/?]+\?cree=1$/);
   await expect(page.getByTestId('projet-cree')).toBeVisible();
 }
 
@@ -147,4 +147,11 @@ export async function fillEidWizard(page: Page, v: { sacrifice?: string; extras?
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Effort d’épargne mensuel (€)').fill(v.monthly);
   return form;
+}
+
+/** Après un envoi : soit la redirection attendue, soit le message d'erreur du formulaire (affiché dans le rapport). */
+export async function expectRedirectOrShowError(page: Page, form: Locator, url: RegExp) {
+  await Promise.race([page.waitForURL(url, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined)]);
+  expect(await form.getByRole('alert').allTextContents(), 'erreur affichée par le formulaire').toEqual([]);
+  await expect(page).toHaveURL(url);
 }

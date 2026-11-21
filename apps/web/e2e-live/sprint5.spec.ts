@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { activateIslamicFinance, apiToken, completeOnboarding, createGoalWithWizard, euros, fakeUser, fillEidWizard, latestLink, rest, signIn, signUpAndConfirm } from './helpers';
+import { activateIslamicFinance, apiToken, completeOnboarding, createGoalWithWizard, euros, expectRedirectOrShowError, fakeUser, fillEidWizard, latestLink, rest, signIn, signUpAndConfirm } from './helpers';
 
 /**
  * Sprint 5 en mode réel, sur mobile et ordinateur. Utilisateurs et montants FICTIFS.
@@ -130,7 +130,7 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await page.getByTestId('lien-preparer-aid').click();
     const form = await fillEidWizard(page, { sacrifice: '350', extras: '80', family: '100', monthly: '50' });
     await form.getByRole('button', { name: 'Créer mon projet Aïd' }).click();
-    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}\?cree=1$/, { timeout: 15_000 });
+    await expectRedirectOrShowError(page, form, /\/goals\/[0-9a-f-]{36}\?cree=1$/);
     await expect(page.getByTestId('budget-aid')).toContainText(euros('330,00 €'));
     await expect(page.getByTestId('date-aid')).toContainText('Saisie, non confirmée');
 
@@ -163,7 +163,7 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await expect(page.getByTestId('form-aid').getByLabel('Sacrifice ou quote-part (€)')).toHaveValue('350,00'); // budget repris, modifiable
     const form = await fillEidWizard(page, { monthly: '50' });
     await form.getByRole('button', { name: 'Créer l’Aïd de l’année suivante' }).click();
-    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}\?cree=1$/, { timeout: 15_000 });
+    await expectRedirectOrShowError(page, form, /\/goals\/[0-9a-f-]{36}\?cree=1$/);
     expect(page.url().split('?')[0]).not.toBe(url);
     await expect(page.getByText('Aucune affectation.')).toBeVisible(); // aucun montant repris
     await page.goto(url);
