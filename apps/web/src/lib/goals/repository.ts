@@ -9,7 +9,7 @@
  * Les calculs restent dans les moteurs déterministes (@amanah/engines) : le dépôt ne fait
  * que lire et enregistrer des faits (projets, affectations, décisions, historique).
  */
-import type { Goal, GoalKind } from '@amanah/engines';
+import type { CustomCalendarEvent, Goal, GoalKind, PlanningPreferences, SuggestionDecision } from '@amanah/engines';
 import type { EidPlanRow } from '../eid-view.ts';
 
 export type IsoDate = string;
@@ -31,7 +31,15 @@ export interface NewGoalInput {
   monthlyCapacityCents: number;
   /** Épargne déjà disponible (affectation « initial », qui ne vaut pas « Suivre »). */
   initialCents: number;
+  /** Suggestion acceptée : modèle d'origine et occurrence annuelle. */
+  templateId?: string | null;
+  occurrence?: number | null;
+  /** Reconduction d'un projet annuel réalisé (une seule fois, année suivante). */
+  previousGoalId?: string | null;
 }
+
+/** Préférences, décisions sur les suggestions et événements du calendrier familial. */
+export interface PlanningData { prefs: PlanningPreferences; decisions: SuggestionDecision[]; events: CustomCalendarEvent[] }
 
 export interface GoalPatch {
   name: string;
@@ -87,4 +95,12 @@ export interface GoalRepository {
   createEid(input: NewEidInput): Promise<RepoResult<{ id: string }>>;
   updateEidDate(goalId: string, date: IsoDate, status: 'entered' | 'confirmed', source: string | null): Promise<RepoResult>;
   updateEidBudget(goalId: string, budget: EidBudgetFields): Promise<RepoResult>;
+
+  /** Suggestions : rien n'est stocké hormis les choix de la personne (préférences, reports, refus). */
+  planning(): Promise<PlanningData>;
+  savePlanningPreferences(prefs: PlanningPreferences): Promise<RepoResult>;
+  /** Reporter (30 jours), ne plus proposer (le modèle), ou rétablir. */
+  decideSuggestion(suggestionId: string, decision: 'snooze' | 'dismiss' | 'restore'): Promise<RepoResult>;
+  addCalendarEvent(event: Omit<CustomCalendarEvent, 'id'>): Promise<RepoResult>;
+  removeCalendarEvent(id: string): Promise<RepoResult>;
 }

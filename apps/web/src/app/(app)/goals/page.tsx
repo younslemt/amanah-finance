@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Badge, Card, CardTitle, Notice, PageHeader, Progress, Stat } from '@/components/ui';
+import { Badge, Card, Notice, PageHeader, Progress, Stat } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
 import { JourneySteps, actionHref } from '@/components/finance/journey';
-import { getHouseholdData, getSnapshot } from '@/lib/data';
+import { loadPlanning } from '@/lib/planning-data';
+import { SuggestionCard } from '@/components/finance/suggestion-card';
 import { isDemoMode } from '@/lib/env';
 import { readDemoState } from '@/lib/goals/demo-repository';
 import { religiousAccess } from '@/lib/supabase/session';
@@ -32,7 +33,9 @@ function AddGoalButton({ className, testId = 'ajouter-objectif' }: { className?:
 
 export default async function GoalsPage() {
   const { enabled: religious } = await religiousAccess();
-  const [s, data] = await Promise.all([getSnapshot(), getHouseholdData()]);
+  const { s, data, suggestions } = await loadPlanning();
+  const fresh = suggestions.filter((x) => x.status === 'new');
+  const snoozed = suggestions.filter((x) => x.status === 'snoozed');
   const storage = isDemoMode ? (await readDemoState()).status : null;
   const t = fr.goals;
   const open = s.goals.filter(({ goal }) => goal.lifecycle !== 'achieved' && goal.lifecycle !== 'archived');
@@ -86,7 +89,8 @@ export default async function GoalsPage() {
       {storage && storage in STORAGE_NOTICE ? <Notice tone="warning" className="mb-3">{STORAGE_NOTICE[storage as keyof typeof STORAGE_NOTICE]}</Notice> : null}
       <Notice>{t.virtualNotice} Affecter un montant à un projet n’est ni une dépense ni un virement.</Notice>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="synthese-projets">
+      <h2 className="mt-6 text-lg font-semibold text-primary-900">1. Mes projets en cours</h2>
+      <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="synthese-projets">
         <Card><Stat label="Projets en cours" value={String(activeOnes.length)} hint={open.length > activeOnes.length ? `${open.length - activeOnes.length} en pause` : undefined} /></Card>
         <Card><Stat label="Épargne virtuelle affectée" value={formatCents(open.reduce((x, g) => x + g.plan.savedCents, 0))} hint="Reste sur vos comptes" /></Card>
         <Card><Stat label="Mensualités prévues" value={formatCents(p.assignedCents)} hint={p.capacityCents === null ? 'Capacité inconnue' : `Capacité : ${formatCents(p.capacityCents)}`} /></Card>
@@ -102,14 +106,6 @@ export default async function GoalsPage() {
         </Card>
       ) : <div className="mt-4 grid gap-4 md:grid-cols-2" data-testid="liste-projets">{open.map(card)}</div>}
 
-      {religious ? (
-        <Card className="mt-4">
-          <CardTitle>Préparer mon Aïd</CardTitle>
-          <p className="mb-3 text-sm text-ink-muted">Sacrifice ou quote-part, frais, contributions familiales, date : un projet par année civile, reconductible chaque année.</p>
-          <Link href="/goals/aid" className="inline-block rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-primary-800 hover:bg-mist" data-testid="lien-preparer-aid">Préparer mon Aïd</Link>
-        </Card>
-      ) : null}
-
       {closed.length > 0 ? (
         <details className="mt-4 rounded-xl border border-line bg-paper p-4" data-testid="projets-clos">
           <summary className="cursor-pointer font-medium">Projets réalisés et archivés ({closed.length})</summary>
@@ -117,6 +113,36 @@ export default async function GoalsPage() {
           <div className="mt-3 grid gap-4 md:grid-cols-2">{closed.map(card)}</div>
         </details>
       ) : null}
+
+      <section className="mt-8" data-testid="projets-suggeres" aria-labelledby="titre-suggestions">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 id="titre-suggestions" className="text-lg font-semibold text-primary-900">2. Projets suggérés</h2>
+          <p className="flex gap-4 text-sm">
+            <Link href="/goals/calendrier" className="text-primary-800 underline-offset-4 hover:underline" data-testid="lien-calendrier">Calendrier familial</Link>
+            <Link href="/goals/preferences" className="text-primary-800 underline-offset-4 hover:underline" data-testid="lien-preferences">Mes préférences</Link>
+          </p>
+        </div>
+        <p className="mt-1 text-sm text-ink-muted">Des idées pour anticiper, d’après le calendrier et vos préférences déclarées. Ce ne sont ni des conseils personnalisés ni des produits financiers : rien n’est créé sans votre accord.</p>
+        {fresh.length === 0 ? <p className="mt-3 text-sm text-ink-muted" data-testid="aucune-suggestion">Aucune nouvelle suggestion. Complétez vos préférences pour en recevoir de plus utiles.</p> : (
+          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">{fresh.map((x) => <SuggestionCard key={x.id} s={x} />)}</div>
+        )}
+        {snoozed.length > 0 ? (
+          <details className="mt-3 text-sm" data-testid="suggestions-reportees">
+            <summary className="cursor-pointer text-ink-muted">Suggestions reportées ({snoozed.length})</summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">{snoozed.map((x) => <SuggestionCard key={x.id} s={x} compact />)}</div>
+          </details>
+        ) : null}
+      </section>
+
+      <section className="mt-8" aria-labelledby="titre-creer">
+        <h2 id="titre-creer" className="text-lg font-semibold text-primary-900">3. Créer mon propre projet</h2>
+        <p className="mt-1 text-sm text-ink-muted">Voyage, mariage, véhicule, création d’entreprise… ou partir d’un modèle du catalogue. Vous décidez de tout, y compris des montants.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/goals/nouveau" className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-primary-800 hover:bg-mist" data-testid="creer-projet-libre">Créer un projet personnalisé</Link>
+          <Link href="/goals/nouveau?mode=modele" className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-primary-800 hover:bg-mist" data-testid="choisir-modele">Choisir dans le catalogue</Link>
+          {religious ? <Link href="/goals/aid" className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-primary-800 hover:bg-mist" data-testid="lien-preparer-aid">Préparer mon Aïd</Link> : null}
+        </div>
+      </section>
 
       {!isDemoMode && !religious ? (
         <div className="mt-4" data-testid="projets-religieux-fermes">

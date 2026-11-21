@@ -6,6 +6,7 @@ export * from './budget.ts';
 export * from './goals.ts';
 export * from './eid.ts';
 export * from './planning.ts';
+export * from './suggestions.ts';
 export * from './purification.ts';
 export * from './csv.ts';
 export * from './wealth.ts';

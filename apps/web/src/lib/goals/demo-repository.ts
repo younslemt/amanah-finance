@@ -6,6 +6,7 @@ import { MAX_CHUNKS, decodeDemoState, encodeDemoState, toChunks } from './demo-c
 import {
   demoHistory, initialDemoState, opAddAllocation, opChooseStrategy, opCreateEid, opCreateGoal, opSavePlan, opSetDeclaredCapacity,
   opSetLifecycle, opUpdateEidBudget, opUpdateEidDate, opUpdateGoal, toEngineGoal, type DemoState, type OpResult,
+  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences,
 } from './demo-state.ts';
 import { fail, ok, type GoalRepository, type RepoResult } from './repository.ts';
 
@@ -74,6 +75,14 @@ export function demoGoalRepository(): GoalRepository {
     createEid: (input) => apply((s) => opCreateEid(s, input, today())),
     updateEidDate: (goalId, d, status, source) => apply((s) => opUpdateEidDate(s, goalId, d, status, source, today())),
     updateEidBudget: (goalId, b) => apply((s) => opUpdateEidBudget(s, goalId, b, today())),
+    planning: async () => {
+      const p = (await readDemoState()).state.planning;
+      return { prefs: p.prefs, decisions: p.decisions, events: p.events };
+    },
+    savePlanningPreferences: (prefs) => apply((s) => opSavePlanningPreferences(s, prefs)),
+    decideSuggestion: (id, decision) => apply((s) => opDecideSuggestion(s, id, decision, today())),
+    addCalendarEvent: (e) => apply((s) => opAddCalendarEvent(s, e)),
+    removeCalendarEvent: (id) => apply((s) => opRemoveCalendarEvent(s, id)),
   };
 }
 

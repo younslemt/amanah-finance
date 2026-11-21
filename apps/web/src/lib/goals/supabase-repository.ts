@@ -3,6 +3,7 @@ import type { SessionContext } from '../supabase/session.ts';
 import { loadEidPlans, loadGoalChanges } from '../supabase/goals.ts';
 import { GOAL_COLUMNS } from '../supabase/household.ts';
 import { mapGoalRow, type GoalRow } from '../household-mapper.ts';
+import { DEFAULT_PLANNING_PREFERENCES, SNOOZE_DAYS, addDays, templateById, type PlanningPreferences } from '@amanah/engines';
 import { fail, ok, type GoalRepository, type RepoResult } from './repository.ts';
 
 /**
@@ -54,7 +55,13 @@ export function supabaseGoalRepository(ctx: SessionContext): GoalRepository {
       const { data, error } = await db.rpc('create_goal_with_allocation', {
         p_household_id: hid, p_kind: input.kind, p_name: input.name, p_target_cents: input.targetCents, p_target_date: input.targetDate,
         p_monthly_capacity_cents: input.monthlyCapacityCents, p_initial_cents: input.initialCents, p_allocated_on: brusselsToday(),
+        p_template_id: input.templateId ?? null, p_occurrence_year: input.occurrence ?? null,
+        p_previous_goal_id: input.previousGoalId && UUID.test(input.previousGoalId) ? input.previousGoalId : null,
       });
+      if (error && input.previousGoalId) {
+        console.error('[goals] renewal', error.code);
+        return fail(error.code === '23505' ? 'Ce projet a déjà été reconduit pour l’année suivante.' : 'Reconduction refusée : l’occurrence précédente doit être réalisée, du même modèle, et l’année suivante.');
+      }
       return error ? dbError('goal', error) : ok({ id: String(data) });
     },
     async update(id, p, opts) {
@@ -133,6 +140,57 @@ export function supabaseGoalRepository(ctx: SessionContext): GoalRepository {
       const p = await db.from('eid_plans').update({ date_status: status, date_source: source }).eq('goal_id', goalId).eq('owner_id', ctx.userId);
       if (p.error) { console.error('[aid] date status', p.error.code); return fail('Enregistrement impossible.'); }
       return ok(undefined);
+    },
+    async planning() {
+      // Préférences et décisions : privées (user_id = soi) ; calendrier : partagé par le foyer
+      const [p, d, e] = await Promise.all([
+        db.from('planning_preferences').select('groups, has_children, has_vehicle, interests, school_calendar, custom_school, confirmations').eq('user_id', ctx.userId).maybeSingle(),
+        db.from('suggestion_decisions').select('suggestion_id, status, until').eq('user_id', ctx.userId),
+        db.from('calendar_events').select('id, label, event_date, yearly').eq('household_id', hid).order('event_date'),
+      ]);
+      if (p.error) throw p.error;
+      if (d.error) throw d.error;
+      if (e.error) throw e.error;
+      const row = p.data as null | { groups: string[]; has_children: boolean | null; has_vehicle: boolean | null; interests: string[]; school_calendar: string; custom_school: PlanningPreferences['customSchool']; confirmations: PlanningPreferences['confirmations'] };
+      const prefs: PlanningPreferences = row ? {
+        groups: row.groups as PlanningPreferences['groups'], hasChildren: row.has_children, hasVehicle: row.has_vehicle, interests: row.interests,
+        schoolCalendar: row.school_calendar as PlanningPreferences['schoolCalendar'], customSchool: row.custom_school ?? null, confirmations: row.confirmations ?? [],
+      } : DEFAULT_PLANNING_PREFERENCES;
+      return {
+        prefs,
+        decisions: ((d.data ?? []) as Array<{ suggestion_id: string; status: 'snoozed' | 'dismissed'; until: string | null }>)
+          .map((x) => ({ id: x.suggestion_id, status: x.status, ...(x.until ? { until: x.until } : {}) })),
+        events: ((e.data ?? []) as Array<{ id: string; label: string; event_date: string; yearly: boolean }>).map((x) => ({ id: x.id, label: x.label, date: x.event_date, yearly: x.yearly })),
+      };
+    },
+    async savePlanningPreferences(prefs) {
+      const { error } = await db.from('planning_preferences').upsert({
+        user_id: ctx.userId, household_id: hid, groups: prefs.groups, has_children: prefs.hasChildren, has_vehicle: prefs.hasVehicle,
+        interests: prefs.interests, school_calendar: prefs.schoolCalendar, custom_school: prefs.customSchool, confirmations: prefs.confirmations,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      return error ? dbError('planning preferences', error) : ok(undefined);
+    },
+    async decideSuggestion(suggestionId, decision) {
+      const templateId = suggestionId.split(':')[0]!;
+      if (!templateById(templateId)) return fail('Suggestion inconnue.');
+      const del = await db.from('suggestion_decisions').delete().eq('user_id', ctx.userId).in('suggestion_id', [suggestionId, templateId]);
+      if (del.error) return dbError('suggestion restore', del.error);
+      if (decision === 'restore') return ok(undefined);
+      const { error } = await db.from('suggestion_decisions').insert(decision === 'snooze'
+        ? { user_id: ctx.userId, household_id: hid, suggestion_id: suggestionId, status: 'snoozed', until: addDays(brusselsToday(), SNOOZE_DAYS) }
+        : { user_id: ctx.userId, household_id: hid, suggestion_id: templateId, status: 'dismissed' });
+      return error ? dbError('suggestion decision', error) : ok(undefined);
+    },
+    async addCalendarEvent(e) {
+      const { error } = await db.from('calendar_events').insert({ household_id: hid, label: e.label, event_date: e.date, yearly: e.yearly });
+      return error ? dbError('calendar event', error) : ok(undefined);
+    },
+    async removeCalendarEvent(id) {
+      if (!UUID.test(id)) return fail('Échéance introuvable.');
+      const { error, count } = await db.from('calendar_events').delete({ count: 'exact' }).eq('id', id).eq('household_id', hid);
+      if (error) return dbError('calendar event delete', error);
+      return count === 1 ? ok(undefined) : fail('Échéance introuvable.');
     },
     async updateEidBudget(goalId, b) {
       if (!UUID.test(goalId)) return fail('Projet introuvable.');

@@ -12,6 +12,8 @@ import { interpolate } from '@/lib/i18n';
 import { fr } from '@/messages/fr';
 import { isDemoMode } from '@/lib/env';
 import { religiousAccess } from '@/lib/supabase/session';
+import { loadPlanning } from '@/lib/planning-data';
+import { suggestionExplanation } from '@/lib/suggestion-text';
 
 export const metadata: Metadata = { title: fr.nav.dashboard };
 
@@ -24,7 +26,9 @@ function SeeAll({ href }: { href: string }) {
 
 export default async function DashboardPage() {
   const { enabled: religious, ctx } = await religiousAccess();
-  const [s, data] = await Promise.all([getSnapshot(), getHouseholdData()]);
+  const [s, data, planning] = await Promise.all([getSnapshot(), getHouseholdData(), loadPlanning()]);
+  // Au plus trois suggestions prioritaires (jamais de création automatique)
+  const topSuggestions = planning.suggestions.filter((x) => x.status === 'new').slice(0, 3);
   // Projets en cours ou en pause (réalisés et archivés : consultables depuis Projets)
   const openGoals = s.goals.filter(({ goal }) => goal.lifecycle !== 'achieved' && goal.lifecycle !== 'archived');
   const accountName = (id: string) => data.accounts.find((x) => x.id === id)?.name ?? 'Compte';
@@ -145,6 +149,23 @@ export default async function DashboardPage() {
             </ul>
           )}
           <p className="mt-4"><Link href="/goals/nouveau" className="text-sm font-medium text-primary-800 underline-offset-4 hover:underline" data-testid="tableau-ajouter-objectif">＋ Ajouter un objectif</Link></p>
+          {topSuggestions.length > 0 ? (
+            <div className="mt-5 border-t border-line pt-4" data-testid="suggestions-accueil">
+              <h3 className="mb-2 text-sm font-semibold text-primary-900">À anticiper</h3>
+              <ul className="space-y-2">
+                {topSuggestions.map((x) => (
+                  <li key={x.id} className="rounded-lg border border-line p-3" data-testid="suggestion-accueil">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">{x.title}</span>
+                      <Link href={x.href} className="text-sm font-medium text-primary-800 underline-offset-4 hover:underline">Préparer ce projet</Link>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-muted">{suggestionExplanation(x)}</p>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs"><Link href="/goals#titre-suggestions" className="text-primary-800 underline">Toutes les suggestions</Link></p>
+            </div>
+          ) : null}
         </Card>
 
         {/* 6. Prochaines actions */}

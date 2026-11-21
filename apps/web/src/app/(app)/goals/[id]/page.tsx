@@ -13,7 +13,7 @@ import { readGoalRepository } from '@/lib/goals';
 import { centsToInput, eidPlanFrom, type EidPlanRow } from '@/lib/eid-view';
 import { updateEidBudget, updateEidDate } from '../aid/actions';
 import {
-  allocationHistory, capacityForGoal, compareScenarios, defaultScenarioMonthlies, eidBudget, eidDateLabel, goalJourney, isReligiousGoal, renewalCheck,
+  allocationHistory, annualRenewalCheck, capacityForGoal, templateById, compareScenarios, defaultScenarioMonthlies, eidBudget, eidDateLabel, goalJourney, isReligiousGoal, renewalCheck,
 } from '@amanah/engines';
 import { fr } from '@/messages/fr';
 import { allocateToGoal, chooseStrategy, setGoalLifecycle, updateGoal } from '../../actions';
@@ -134,6 +134,7 @@ export default async function GoalPage({ params, searchParams }: { params: Promi
       <PageHeader title={goal.name} subtitle={`${t.kind[goal.kind]}${isReligiousGoal(goal.kind) ? ' · projet privé (finance islamique)' : ' · projet du foyer'}`} />
       {q.cree ? <p role="status" className="mb-3 rounded-lg bg-primary-50 p-3 text-sm text-primary-900" data-testid="projet-cree">Projet créé. Il apparaît dans vos projets, votre plan d’épargne et votre tableau de bord. Prochaine étape : {journey.next ? t.action[journey.next.action].toLowerCase() : 'aucune'}.</p> : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {goal.templateId && templateById(goal.templateId) ? <Badge>Suggestion : {templateById(goal.templateId)!.title}{goal.occurrence ? ` ${goal.occurrence}` : ''}</Badge> : null}
         <Badge tone={!active ? 'neutral' : tone[plan.status]}>{!active ? t.lifecycle[lifecycle] : t.status[plan.status]}</Badge>
         {goal.priority ? <Badge>Priorité {goal.priority}</Badge> : null}
       </div>
@@ -232,6 +233,25 @@ export default async function GoalPage({ params, searchParams }: { params: Promi
         <p className="mt-2 text-xs text-ink-muted">Repère vertical : échéance souhaitée. Simulation seulement : rien n’est enregistré tant que vous ne retenez pas un scénario.</p>
       </Card>
 
+      {(() => {
+        // Impact sur les autres projets : la capacité est servie par priorité, jamais deux fois
+        const others = s.savingsPlan.lines.filter((l) => l.goalId !== goal.id && l.fundedCents < l.plannedCents);
+        return (
+          <Card className="mt-4">
+            <CardTitle>Impact sur vos autres projets</CardTitle>
+            <div data-testid="impact-projets">
+              {s.savingsPlan.capacityCents === null ? <p className="text-sm text-ink-muted">Capacité d’épargne inconnue : l’impact ne peut pas être mesuré.</p>
+                : others.length === 0 ? <p className="text-sm text-ink-muted">Vos autres projets restent financés comme prévu avec la répartition actuelle.</p> : (
+                  <ul className="list-disc space-y-1 pl-5 text-sm">
+                    {others.map((l) => <li key={l.goalId}>{s.goals.find((g) => g.goal.id === l.goalId)?.goal.name ?? 'Projet'} : {formatCents(l.fundedCents)} sur {formatCents(l.plannedCents)} prévus par mois.</li>)}
+                  </ul>
+                )}
+              <p className="mt-2 text-xs text-ink-muted"><Link href="/budget/plan-epargne" className="underline">Ajuster les priorités du plan d’épargne</Link></p>
+            </div>
+          </Card>
+        );
+      })()}
+
       <Card className="mt-4">
         <span id="suivre" className="block scroll-mt-20" />
         <CardTitle>4. Suivre</CardTitle>
@@ -283,6 +303,14 @@ export default async function GoalPage({ params, searchParams }: { params: Promi
             </ActionForm>
           </div>
         )}
+        {(() => {
+          const renewal = annualRenewalCheck(goal, data.goals);
+          return renewal.allowed ? (
+            <p className="mt-3 text-sm"><Link href={`/goals/nouveau?suite=${goal.id}`} className="font-medium text-primary-800 underline" data-testid="lien-reconduire-projet">Préparer {renewal.template.title.toLowerCase()} {renewal.occurrence}</Link>
+              <span className="block text-xs text-ink-muted">Nouvelle occurrence distincte : le budget de cette année sera proposé comme référence, rien d’autre n’est repris.</span></p>
+          ) : goal.templateId && templateById(goal.templateId)?.recurrence === 'yearly' && renewal.reason === 'already_renewed'
+            ? <p className="mt-3 text-sm text-ink-muted" data-testid="deja-reconduit">Occurrence suivante déjà préparée.</p> : null;
+        })()}
         {lifecycle === 'achieved' || journey.readyToRealize ? (
           <p className="mt-3 text-sm"><Link href={`/goals/${goal.id}/solutions`} className="font-medium text-primary-800 underline" data-testid="lien-solutions">{t.action.explore_solutions} →</Link></p>
         ) : null}

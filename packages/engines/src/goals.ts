@@ -2,10 +2,11 @@ import type { Cents } from './money.ts';
 import { divRoundHalfEven } from './money.ts';
 import { addMonths, monthsBetween, type IsoDate } from './dates.ts';
 
-export type GoalKind = 'hajj' | 'omra' | 'eid_al_adha' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
+/** religious_other : autre projet religieux (Ramadan, Aïd al-Fitr…) — protégé comme Hajj, Omra et Aïd (article 9). */
+export type GoalKind = 'hajj' | 'omra' | 'eid_al_adha' | 'religious_other' | 'children_education' | 'real_estate' | 'retirement' | 'family_savings' | 'emergency_fund' | 'personal';
 
 /** Projets propres à une personne et protégés (consentement article 9). */
-export const RELIGIOUS_GOAL_KINDS: readonly GoalKind[] = ['hajj', 'omra', 'eid_al_adha'];
+export const RELIGIOUS_GOAL_KINDS: readonly GoalKind[] = ['hajj', 'omra', 'eid_al_adha', 'religious_other'];
 export const GENERAL_GOAL_KINDS: readonly GoalKind[] = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal'];
 export const isReligiousGoal = (kind: GoalKind): boolean => RELIGIOUS_GOAL_KINDS.includes(kind);
 
@@ -30,6 +31,11 @@ export interface Goal {
   planConfirmedOn?: IsoDate;
   /** « Simuler » : stratégie retenue après comparaison de scénarios (mensualité et date du choix). */
   strategy?: { monthlyCents: Cents; chosenOn: IsoDate };
+  /** Modèle du catalogue à l'origine du projet (suggestion acceptée), et occurrence annuelle. */
+  templateId?: string;
+  occurrence?: number;
+  /** Projet annuel reconduit : occurrence précédente (jamais fusionnée avec celle-ci). */
+  previousGoalId?: string;
 }
 
 export interface GoalAllocation {

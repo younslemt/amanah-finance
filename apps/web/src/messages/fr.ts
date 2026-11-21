@@ -95,11 +95,13 @@ export const fr = {
     kind: {
       hajj: 'Hajj', omra: 'Omra', eid_al_adha: 'Aïd al-Adha', children_education: 'Études des enfants', real_estate: 'Achat immobilier',
       retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve de précaution', personal: 'Projet personnel',
+      religious_other: 'Autre projet religieux',
     },
     kindHint: {
       hajj: 'Pèlerinage : voyage, forfait, préparation', omra: 'Petit pèlerinage, seul ou en famille', eid_al_adha: 'Sacrifice ou quote-part, frais, famille',
       children_education: 'Frais de scolarité, études supérieures', real_estate: 'Apport, frais de notaire, travaux', retirement: 'Compléter sa pension',
       family_savings: 'Une épargne commune pour la famille', emergency_fund: 'Faire face aux imprévus', personal: 'Voyage, mariage, véhicule, création d’entreprise…',
+      religious_other: 'Ramadan, Aïd al-Fitr…',
     },
     stepStatus: { done: 'fait', available: 'disponible', locked: 'en attente' },
     action: {

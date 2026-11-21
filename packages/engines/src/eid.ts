@@ -59,6 +59,21 @@ export interface EidEstimate {
   isEstimate: true;
 }
 
+/**
+ * Date hégirienne (mois, jour) estimée pour chaque année hégirienne tombant dans l'année civile.
+ * Ex. Ramadan : (9, 1) ; Aïd al-Fitr : (10, 1). Indicatif : jamais une confirmation.
+ */
+export function estimateHijriEvent(civilYear: number, month: number, day: number): EidEstimate[] {
+  if (!Number.isInteger(civilYear) || civilYear < 2000 || civilYear > 2100) throw new RangeError('année civile hors plage (2000 à 2100)');
+  const approx = Math.floor(((civilYear - 622) * 33) / 32);
+  const out: EidEstimate[] = [];
+  for (let h = approx - 2; h <= approx + 2; h++) {
+    const date = jdToIso(islamicToJd(h, month, day));
+    if (date.startsWith(`${civilYear}-`)) out.push({ hijriYear: h, date, method: 'tabular', isEstimate: true });
+  }
+  return out;
+}
+
 /** 10 dhou al-hijja des années hégiriennes tombant dans l'année civile (une, rarement deux). */
 export function estimateEidAlAdha(civilYear: number): EidEstimate[] {
   if (!Number.isInteger(civilYear) || civilYear < 2000 || civilYear > 2100) throw new RangeError('année civile hors plage (2000 à 2100)');

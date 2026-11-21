@@ -4,9 +4,11 @@ import { getDemoHousehold } from './demo.ts';
 import {
   DEMO_LIMITS, initialDemoState, opAddAllocation, opChooseStrategy, opCreateEid, opCreateGoal, opSavePlan, opSetDeclaredCapacity,
   opSetLifecycle, opUpdateEidBudget, opUpdateEidDate, opUpdateGoal, parseDemoState, demoHistory, type DemoState, type OpResult,
+  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences,
 } from './goals/demo-state.ts';
+import { deflateRawSync } from 'node:zlib';
 import { decodeDemoState, encodeDemoState, toChunks } from './goals/demo-codec.ts';
-import { goalJourney, planGoal } from '@amanah/engines';
+import { capacityForGoal, familyCalendar, goalJourney, planGoal, suggestGoals } from '@amanah/engines';
 
 const today = '2026-11-09'; // date fictive des données de démonstration
 const must = <T,>(r: OpResult<T>): { state: DemoState; value: T } => { if (!r.ok) throw new Error(r.error); return r; };
@@ -99,8 +101,16 @@ describe('démonstration interactive : projets sans base de données', () => {
   it('stockage : versionné, compressé, validé ; contenu altéré ou trop volumineux refusé', () => {
     const s = must(opCreateGoal(initialDemoState(), travel, today)).state;
     const encoded = encodeDemoState(s);
-    expect(encoded.startsWith('v1.')).toBe(true);
+    expect(encoded.startsWith('v2.')).toBe(true);
     expect(decodeDemoState(encoded)).toEqual({ state: s, status: 'ok' });
+    // Format v1 (version précédente) : mis à niveau à la lecture, projets conservés, préférences de départ
+    const { planning: _p, ...rest } = s;
+    const v1 = { ...rest, v: 1, goals: s.goals.map(({ templateId: _t, occurrence: _o, previousGoalId: _g, ...g }) => g) };
+    const raw1 = 'v1.' + deflateRawSync(Buffer.from(JSON.stringify(v1))).toString('base64url');
+    const up = decodeDemoState(raw1);
+    expect(up.status).toBe('ok');
+    expect(up.state!.goals.map((g) => g.name)).toEqual(s.goals.map((g) => g.name));
+    expect(up.state!.planning.prefs.hasChildren).toBe(true);
     expect(decodeDemoState(null).status).toBe('empty');
     expect(decodeDemoState('v0.abc').status).toBe('outdated');
     expect(decodeDemoState('v1.!!pas-du-deflate!!').status).toBe('corrupted');
@@ -108,7 +118,7 @@ describe('démonstration interactive : projets sans base de données', () => {
     // JSON valide mais altéré : montant négatif, référence orpheline, version inconnue
     expect(parseDemoState({ ...s, goals: [{ ...s.goals[0]!, targetCents: -1 }] })).toBe(null);
     expect(parseDemoState({ ...s, allocations: [...s.allocations, { goalId: 'inconnu', amountCents: 1, allocatedOn: today, source: 'manual' }] })).toBe(null);
-    expect(parseDemoState({ ...s, v: 2 })).toBe(null);
+    expect(parseDemoState({ ...s, v: 3 })).toBe(null);
     expect(parseDemoState({ ...s, goals: [{ ...s.goals[0]!, name: '<script>'.repeat(30) }] })).toBe(null);
     // Taille : un état réaliste tient dans les cookies ; au-delà des limites, l'opération est refusée
     let big = initialDemoState();
@@ -127,5 +137,60 @@ describe('démonstration interactive : projets sans base de données', () => {
     expect(s.goals.map((g) => g.id)).toEqual(['goal-hajj', 'goal-omra', 'goal-etudes', 'goal-aid']);
     expect(s.declaredCapacityCents).toBe(50_000);
     expect(parseDemoState(s)).toEqual(s);
+  });
+
+  it('suggestions en démonstration : préférences, décisions et calendrier conservés, création depuis un modèle sans doublon', () => {
+    let s = initialDemoState();
+    const suggest = (st: DemoState) => {
+      const h = getDemoHousehold(st);
+      const snap = buildSnapshot(h);
+      const calendar = familyCalendar({ asOf: h.asOf, prefs: st.planning.prefs, religiousEnabled: true, customEvents: st.planning.events, goalDeadlines: [], eidDates: [], annualExpenses: [] });
+      return suggestGoals({
+        asOf: h.asOf, prefs: st.planning.prefs, religiousEnabled: true, calendar, decisions: st.planning.decisions,
+        goals: h.goals.map((g) => ({ id: g.id, kind: g.kind, templateId: g.templateId, occurrence: g.occurrence, lifecycle: g.lifecycle })),
+        eidYears: st.eidPlans.map((p) => p.civil_year), availableCapacityCents: capacityForGoal(snap.savingsPlan, '__n__').availableCents,
+      });
+    };
+    const statusOf = (st: DemoState, id: string) => suggest(st).find((x) => x.id === id)?.status;
+    expect(statusOf(s, 'rentree-scolaire:2027')).toBe('new');
+    expect(statusOf(s, 'aid-al-adha:2027')).toBe('accepted'); // l'Aïd fictif 2027 existe déjà
+    // Création depuis la suggestion : montant choisi par la personne, la suggestion devient « acceptée »
+    s = must(opCreateGoal(s, { kind: 'children_education', name: 'Rentrée scolaire 2027', targetCents: 45_000, targetDate: '2027-08-30', monthlyCapacityCents: 5_000, initialCents: 0, templateId: 'rentree-scolaire', occurrence: 2027 }, today)).state;
+    expect(statusOf(s, 'rentree-scolaire:2027')).toBe('accepted');
+    expect(buildSnapshot(getDemoHousehold(s)).goals.some((g) => g.goal.name === 'Rentrée scolaire 2027')).toBe(true);
+    // Reporter, ne plus proposer, rétablir
+    s = must(opDecideSuggestion(s, 'ramadan:2027', 'snooze', today)).state;
+    expect(statusOf(s, 'ramadan:2027')).toBe('snoozed');
+    expect(s.planning.decisions.find((d) => d.id === 'ramadan:2027')!.until).toBe('2026-12-09');
+    s = must(opDecideSuggestion(s, 'vacances-familiales:2027', 'dismiss', today)).state;
+    expect(statusOf(s, 'vacances-familiales:2027')).toBe('dismissed');
+    s = must(opDecideSuggestion(s, 'vacances-familiales', 'restore', today)).state;
+    expect(statusOf(s, 'vacances-familiales:2027')).toBe('new');
+    expect(opDecideSuggestion(s, 'inconnu:2027', 'dismiss', today).ok).toBe(false);
+    // Préférences respectées : sans enfant déclaré, plus de rentrée
+    s = must(opSavePlanningPreferences(s, { ...s.planning.prefs, hasChildren: false })).state;
+    expect(statusOf(s, 'rentree-scolaire:2027')).toBe(undefined);
+    // Calendrier : échéance personnalisée ajoutée puis retirée
+    s = must(opAddCalendarEvent(s, { label: 'Taxe annuelle fictive', date: '2027-06-15', yearly: true })).state;
+    const evt = s.planning.events.at(-1)!;
+    expect(parseDemoState(s)).toEqual(s);
+    s = must(opRemoveCalendarEvent(s, evt.id)).state;
+    expect(s.planning.events.some((e) => e.id === evt.id)).toBe(false);
+  });
+
+  it('projet annuel : reconduction après réalisation, une seule fois, budget modifiable, aucune affectation reprise', () => {
+    let s = must(opCreateGoal(initialDemoState(), { kind: 'personal', name: 'Vacances familiales 2026', targetCents: 120_000, targetDate: '2026-12-20', monthlyCapacityCents: 10_000, initialCents: 30_000, templateId: 'vacances-familiales', occurrence: 2026 }, today)).state;
+    const prev = s.goals.at(-1)!.id;
+    const renewal = { kind: 'personal' as const, name: 'Vacances familiales 2027', targetCents: 150_000, targetDate: '2027-07-03', monthlyCapacityCents: 12_000, initialCents: 0, templateId: 'vacances-familiales', occurrence: 2027, previousGoalId: prev };
+    expect(opCreateGoal(s, renewal, today).ok).toBe(false); // pas encore réalisé
+    s = must(opSetLifecycle(s, prev, 'achieve', today, today)).state;
+    expect(opCreateGoal(s, { ...renewal, occurrence: 2028 }, today).ok).toBe(false); // mauvaise année
+    expect(opCreateGoal(s, { ...renewal, templateId: 'rentree-scolaire' }, today).ok).toBe(false); // autre modèle
+    const r = must(opCreateGoal(s, renewal, today)); s = r.state;
+    expect(s.goals.find((g) => g.id === r.value.id)).toMatchObject({ targetCents: 150_000, occurrence: 2027, previousGoalId: prev });
+    expect(s.allocations.some((a) => a.goalId === r.value.id)).toBe(false);
+    expect(opCreateGoal(s, renewal, today).ok).toBe(false); // une seule fois
+    // Modèles du chantier distinct : refusés
+    expect(opCreateGoal(s, { ...renewal, previousGoalId: null, templateId: 'retraite', occurrence: null }, today).ok).toBe(false);
   });
 });

@@ -7,6 +7,8 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { DEMO_STATE_VERSION, parseDemoState, type DemoState } from './demo-state.ts';
 
 const PREFIX = `v${DEMO_STATE_VERSION}.`;
+/** Versions lisibles : la courante et la précédente (mise à niveau à la lecture). */
+const READABLE = [`v${DEMO_STATE_VERSION}.`, `v${DEMO_STATE_VERSION - 1}.`];
 /** Taille maximale d'un morceau de cookie (marge sous la limite de 4 096 octets). */
 export const CHUNK_SIZE = 3_500;
 /** Nombre maximal de morceaux : l'ensemble reste sous les limites d'en-têtes des serveurs. */
@@ -21,9 +23,10 @@ export type Decoded = { state: DemoState; status: 'ok' } | { state: null; status
 
 export function decodeDemoState(raw: string | null | undefined): Decoded {
   if (!raw) return { state: null, status: 'empty' };
-  if (!raw.startsWith(PREFIX)) return { state: null, status: /^v\d+\./.test(raw) ? 'outdated' : 'corrupted' };
+  const prefix = READABLE.find((p) => raw.startsWith(p));
+  if (!prefix) return { state: null, status: /^v\d+\./.test(raw) ? 'outdated' : 'corrupted' };
   try {
-    const json = inflateRawSync(Buffer.from(raw.slice(PREFIX.length), 'base64url'), { maxOutputLength: MAX_INFLATED }).toString('utf8');
+    const json = inflateRawSync(Buffer.from(raw.slice(prefix.length), 'base64url'), { maxOutputLength: MAX_INFLATED }).toString('utf8');
     const state = parseDemoState(JSON.parse(json));
     return state ? { state, status: 'ok' } : { state: null, status: 'corrupted' };
   } catch {

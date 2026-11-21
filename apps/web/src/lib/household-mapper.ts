@@ -14,6 +14,7 @@ export interface GoalRow {
   id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string;
   monthly_capacity_cents?: number | string | null; priority?: number | null; realized_on?: string | null;
   plan_confirmed_on?: string | null; strategy_monthly_cents?: number | string | null; strategy_chosen_on?: string | null;
+  template_id?: string | null; occurrence_year?: number | null; previous_goal_id?: string | null;
 }
 export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string; source?: 'initial' | 'manual' | null }
 export interface AssetRow { id: string; kind: ZakatAsset['kind']; name: string; value_cents: number | string; weight_mg: number | string | null; purity_permille: number | null; is_accessible: boolean; receivable_likely: boolean | null; account_id: string | null; details: Record<string, unknown> | null }
@@ -154,5 +155,8 @@ export function mapGoalRow(g: GoalRow): Goal {
     ...(g.priority ? { priority: g.priority } : {}),
     ...(g.plan_confirmed_on ? { planConfirmedOn: g.plan_confirmed_on } : {}),
     ...strategy,
+    ...(g.template_id ? { templateId: g.template_id } : {}),
+    ...(g.occurrence_year ? { occurrence: g.occurrence_year } : {}),
+    ...(g.previous_goal_id ? { previousGoalId: g.previous_goal_id } : {}),
   };
 }

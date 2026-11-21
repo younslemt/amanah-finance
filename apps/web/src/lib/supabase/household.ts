@@ -15,7 +15,7 @@ export class NotAuthenticatedError extends Error {
 
 const HISTORY_MONTHS = 6;
 /** Colonnes d'un projet, décisions du parcours comprises (migration 0021). */
-export const GOAL_COLUMNS = 'id, kind, name, target_cents, target_date, status, monthly_capacity_cents, priority, realized_on, plan_confirmed_on, strategy_monthly_cents, strategy_chosen_on';
+export const GOAL_COLUMNS = 'id, kind, name, target_cents, target_date, status, monthly_capacity_cents, priority, realized_on, plan_confirmed_on, strategy_monthly_cents, strategy_chosen_on, template_id, occurrence_year, previous_goal_id';
 
 export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   const supabase = await createSupabaseServerClient();

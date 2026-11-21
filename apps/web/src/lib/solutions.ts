@@ -21,6 +21,7 @@ const BY_KIND: Record<GoalKind, SolutionCategory[]> = {
   hajj: ['pilgrimage_organizer', 'savings_solution'],
   omra: ['pilgrimage_organizer', 'savings_solution'],
   eid_al_adha: ['eid_provider'],
+  religious_other: ['savings_solution'],
   children_education: ['education_provider', 'savings_solution'],
   real_estate: ['real_estate_professional', 'savings_solution'],
   retirement: ['savings_solution'],

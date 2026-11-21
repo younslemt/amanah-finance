@@ -12,26 +12,51 @@
  */
 import { z } from 'zod';
 import { DEMO_ALLOCATIONS, DEMO_AS_OF, DEMO_GOALS } from '@amanah/banking';
-import { eidBudget, type Goal, type GoalAllocation, type GoalKind } from '@amanah/engines';
+import { DEFAULT_PLANNING_PREFERENCES, addDays, eidBudget, templateById, type Goal, type GoalAllocation, type GoalKind, type PlanningPreferences, SNOOZE_DAYS } from '@amanah/engines';
 import { DEMO_AID_ALLOCATIONS, DEMO_AID_GOAL, DEMO_AID_PLAN } from '../demo-eid.ts';
 import type { EidBudgetFields, GoalChangeRow, GoalPatch, LifecycleAction, NewEidInput, NewGoalInput, PlanLineInput } from './repository.ts';
 
-export const DEMO_STATE_VERSION = 1;
+/**
+ * Version du format. v2 : projets issus d'un modèle (suggestion), projets annuels, préférences,
+ * décisions et calendrier familial. Un état v1 est mis à niveau à la lecture, sans perte.
+ */
+export const DEMO_STATE_VERSION = 2;
 /** Limites de la démonstration (taille du stockage dans le navigateur). */
-export const DEMO_LIMITS = { goals: 30, allocations: 300, changes: 300, eidPlans: 10 } as const;
+export const DEMO_LIMITS = { goals: 30, allocations: 300, changes: 300, eidPlans: 10, decisions: 100, events: 30 } as const;
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const cents = z.number().int().min(0).max(100_000_000_00);
 const id = z.string().regex(/^[a-z0-9-]{3,40}$/);
-const KINDS = ['hajj', 'omra', 'eid_al_adha', 'children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal'] as const;
+const KINDS = ['hajj', 'omra', 'eid_al_adha', 'religious_other', 'children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal'] as const;
 
-const goalSchema = z.object({
+const goalFields = {
   id, kind: z.enum(KINDS), name: z.string().min(1).max(120),
   targetCents: cents.min(1), targetDate: date, monthlyCapacityCents: cents.nullable(),
   priority: z.number().int().min(1).max(5), status: z.enum(['active', 'paused', 'achieved', 'archived']),
   realizedOn: date.nullable(), createdOn: date, planConfirmedOn: date.nullable(),
   strategyMonthlyCents: cents.nullable(), strategyChosenOn: date.nullable(),
-}).refine((g) => (g.status === 'achieved') === (g.realizedOn !== null)).refine((g) => (g.strategyMonthlyCents === null) === (g.strategyChosenOn === null));
+};
+const goalRules = <T extends z.ZodType<{ status: string; realizedOn: string | null; strategyMonthlyCents: number | null; strategyChosenOn: string | null }>>(sch: T) =>
+  sch.refine((g) => (g.status === 'achieved') === (g.realizedOn !== null)).refine((g) => (g.strategyMonthlyCents === null) === (g.strategyChosenOn === null));
+const goalSchemaV1 = goalRules(z.object(goalFields));
+const templateId = z.string().regex(/^[a-z0-9-]{2,40}$/);
+const goalSchema = goalRules(z.object({
+  ...goalFields,
+  templateId: templateId.nullable(), occurrence: z.number().int().min(2000).max(2100).nullable(), previousGoalId: id.nullable(),
+}));
+const monthDay = z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+const planningSchema = z.object({
+  prefs: z.object({
+    groups: z.array(z.enum(['religious', 'family', 'finance', 'wealth'])).max(4),
+    hasChildren: z.boolean().nullable(), hasVehicle: z.boolean().nullable(),
+    interests: z.array(templateId).max(30),
+    schoolCalendar: z.enum(['be-fwb', 'be-vl', 'custom']),
+    customSchool: z.object({ start: monthDay, holidays: monthDay }).nullable(),
+    confirmations: z.array(z.object({ type: z.enum(['ramadan', 'eid_al_fitr']), year: z.number().int().min(2000).max(2100), date, source: z.string().min(3).max(200) })).max(20),
+  }),
+  decisions: z.array(z.object({ id: z.string().regex(/^[a-z0-9-]{2,40}(:[0-9]{4})?$/), status: z.enum(['snoozed', 'dismissed']), until: date.optional() })).max(DEMO_LIMITS.decisions),
+  events: z.array(z.object({ id, label: z.string().min(2).max(80), date, yearly: z.boolean() })).max(DEMO_LIMITS.events),
+});
 
 const allocationSchema = z.object({
   goalId: id, amountCents: z.number().int().min(-100_000_000_00).max(100_000_000_00).refine((v) => v !== 0),
@@ -47,14 +72,20 @@ const eidSchema = z.object({
   date_status: z.enum(['entered', 'confirmed']), date_source: z.string().max(200).nullable(), estimated_date: date.nullable(), previous_goal_id: id.nullable(),
 });
 
-export const demoStateSchema = z.object({
-  v: z.literal(DEMO_STATE_VERSION),
+const stateFields = {
   seq: z.number().int().min(0).max(1_000_000),
-  goals: z.array(goalSchema).max(DEMO_LIMITS.goals + 5),
   allocations: z.array(allocationSchema).max(DEMO_LIMITS.allocations + 20),
   changes: z.array(changeSchema).max(DEMO_LIMITS.changes + 20),
   eidPlans: z.array(eidSchema).max(DEMO_LIMITS.eidPlans),
   declaredCapacityCents: cents.nullable(),
+};
+const demoStateV1Schema = z.object({ v: z.literal(1), ...stateFields, goals: z.array(goalSchemaV1).max(DEMO_LIMITS.goals + 5) });
+
+export const demoStateSchema = z.object({
+  v: z.literal(DEMO_STATE_VERSION),
+  ...stateFields,
+  goals: z.array(goalSchema).max(DEMO_LIMITS.goals + 5),
+  planning: planningSchema,
 }).superRefine((s, ctx) => {
   // Cohérence des références : une donnée orpheline signale un contenu altéré
   const ids = new Set(s.goals.map((g) => g.id));
@@ -62,6 +93,7 @@ export const demoStateSchema = z.object({
   if (s.allocations.some((a) => !ids.has(a.goalId)) || s.changes.some((c) => !ids.has(c.goalId))) ctx.addIssue({ code: 'custom', message: 'référence inconnue' });
   const eidGoals = new Set(s.goals.filter((g) => g.kind === 'eid_al_adha').map((g) => g.id));
   if (s.eidPlans.some((p) => !eidGoals.has(p.goal_id))) ctx.addIssue({ code: 'custom', message: 'plan Aïd orphelin' });
+  if (s.goals.some((g) => g.previousGoalId !== null && !ids.has(g.previousGoalId))) ctx.addIssue({ code: 'custom', message: 'occurrence précédente inconnue' });
 });
 
 export type DemoState = z.infer<typeof demoStateSchema>;
@@ -71,7 +103,25 @@ export type DemoAllocation = DemoState['allocations'][number];
 /** Validation d'un contenu lu dans le navigateur : null s'il est illisible ou altéré. */
 export function parseDemoState(raw: unknown): DemoState | null {
   const r = demoStateSchema.safeParse(raw);
-  return r.success ? r.data : null;
+  if (r.success) return r.data;
+  // Mise à niveau d'un état v1 : projets et historique conservés, préférences de départ
+  const v1 = demoStateV1Schema.safeParse(raw);
+  if (!v1.success) return null;
+  const up = demoStateSchema.safeParse({
+    ...v1.data, v: DEMO_STATE_VERSION,
+    goals: v1.data.goals.map((g) => ({ ...g, templateId: null, occurrence: null, previousGoalId: null })),
+    planning: initialPlanning(),
+  });
+  return up.success ? up.data : null;
+}
+
+/** Préférences fictives de départ : déclarées pour la démonstration (enfants, véhicule). */
+export function initialPlanning(): DemoState['planning'] {
+  return {
+    prefs: { ...DEFAULT_PLANNING_PREFERENCES, hasChildren: true, hasVehicle: true, interests: ['entretien-automobile'] },
+    decisions: [],
+    events: [{ id: 'evt-assurance', label: 'Assurance habitation (fictive)', date: '2027-03-15', yearly: true }],
+  };
 }
 
 /** Point de départ : les données fictives existantes (projets, affectations, Aïd, capacité). */
@@ -88,6 +138,7 @@ export function initialDemoState(): DemoState {
       monthlyCapacityCents: g.monthlyCapacityCents ?? null, priority: g.priority ?? 3, status: 'active',
       realizedOn: null, createdOn: seedAllocations[first.get(g.id) ?? -1]?.allocatedOn ?? DEMO_AS_OF,
       planConfirmedOn: null, strategyMonthlyCents: null, strategyChosenOn: null,
+      templateId: null, occurrence: null, previousGoalId: null,
     })),
     // La première affectation de chaque projet fictif est son épargne de départ
     allocations: seedAllocations.map((a, i) => ({ goalId: a.goalId, amountCents: a.amountCents, allocatedOn: a.allocatedOn, source: first.get(a.goalId) === i ? 'initial' : 'manual' })),
@@ -98,6 +149,7 @@ export function initialDemoState(): DemoState {
       organization_cents: Number(DEMO_AID_PLAN.organization_cents), family_contribution_cents: Number(DEMO_AID_PLAN.family_contribution_cents),
     }],
     declaredCapacityCents: 50_000,
+    planning: initialPlanning(),
   };
 }
 
@@ -110,6 +162,9 @@ export function toEngineGoal(g: DemoGoal): Goal {
     ...(g.realizedOn ? { realizedOn: g.realizedOn } : {}),
     ...(g.planConfirmedOn ? { planConfirmedOn: g.planConfirmedOn } : {}),
     ...(g.strategyMonthlyCents !== null && g.strategyChosenOn ? { strategy: { monthlyCents: g.strategyMonthlyCents, chosenOn: g.strategyChosenOn } } : {}),
+    ...(g.templateId ? { templateId: g.templateId } : {}),
+    ...(g.occurrence !== null ? { occurrence: g.occurrence } : {}),
+    ...(g.previousGoalId ? { previousGoalId: g.previousGoalId } : {}),
   };
 }
 export const toEngineAllocations = (s: DemoState): GoalAllocation[] =>
@@ -152,16 +207,31 @@ function withinLimits(s: DemoState): OpResult<never> | null {
   return null;
 }
 
-function newGoal(s: DemoState, base: Omit<DemoGoal, 'id' | 'priority' | 'status' | 'realizedOn' | 'planConfirmedOn' | 'strategyMonthlyCents' | 'strategyChosenOn'>): { state: DemoState; goal: DemoGoal } {
-  const goal: DemoGoal = { ...base, id: `demo-${s.seq + 1}`, priority: 3, status: 'active', realizedOn: null, planConfirmedOn: null, strategyMonthlyCents: null, strategyChosenOn: null };
+type NewGoalBase = Omit<DemoGoal, 'id' | 'priority' | 'status' | 'realizedOn' | 'planConfirmedOn' | 'strategyMonthlyCents' | 'strategyChosenOn' | 'templateId' | 'occurrence' | 'previousGoalId'>
+  & Partial<Pick<DemoGoal, 'templateId' | 'occurrence' | 'previousGoalId'>>;
+function newGoal(s: DemoState, base: NewGoalBase): { state: DemoState; goal: DemoGoal } {
+  const goal: DemoGoal = {
+    templateId: null, occurrence: null, previousGoalId: null, ...base,
+    id: `demo-${s.seq + 1}`, priority: 3, status: 'active', realizedOn: null, planConfirmedOn: null, strategyMonthlyCents: null, strategyChosenOn: null,
+  };
   return { state: { ...s, seq: s.seq + 1, goals: [...s.goals, goal] }, goal };
 }
 
 export function opCreateGoal(s: DemoState, input: NewGoalInput, today: string): OpResult<{ id: string }> {
   if (input.initialCents > input.targetCents) return err('Vérifiez les informations saisies.', { available: 'L’épargne disponible dépasse le montant cible.' });
+  if (input.templateId && !templateById(input.templateId)?.available) return err('Modèle de projet inconnu.');
+  // Reconduction d'un projet annuel : mêmes règles que la base (goal_template_guard)
+  if (input.previousGoalId) {
+    const prev = findGoal(s, input.previousGoalId);
+    if (!prev || prev.status !== 'achieved' || prev.templateId !== (input.templateId ?? null) || prev.occurrence === null || input.occurrence !== prev.occurrence + 1) {
+      return err('Reconduction refusée : l’occurrence précédente doit être réalisée, du même modèle, et l’année suivante.');
+    }
+    if (s.goals.some((g) => g.previousGoalId === input.previousGoalId)) return err('Ce projet a déjà été reconduit pour l’année suivante.');
+  }
   const { state, goal } = newGoal(s, {
     kind: input.kind, name: input.name, targetCents: input.targetCents, targetDate: input.targetDate,
     monthlyCapacityCents: input.monthlyCapacityCents, createdOn: today,
+    templateId: input.templateId ?? null, occurrence: input.occurrence ?? null, previousGoalId: input.previousGoalId ?? null,
   });
   const next = input.initialCents > 0
     ? { ...state, allocations: [...state.allocations, { goalId: goal.id, amountCents: input.initialCents, allocatedOn: today, source: 'initial' as const }] }
@@ -290,4 +360,34 @@ export function opUpdateEidBudget(s: DemoState, goalId: string, b: EidBudgetFiel
   // Le montant à mettre de côté suit le budget (comme eid_sync_target) ; les affectations restent
   const state = replaceGoal({ ...s, eidPlans: s.eidPlans.map((p) => (p.goal_id === goalId ? nextPlan : p)) }, { ...g, targetCents: amount }, `${today}T12:00:00Z`, extra);
   return withinLimits(state) ?? done(state, undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions, préférences et calendrier familial
+// ---------------------------------------------------------------------------
+export function opSavePlanningPreferences(s: DemoState, prefs: PlanningPreferences): OpResult {
+  return done({ ...s, planning: { ...s.planning, prefs } }, undefined);
+}
+
+/** Reporter : 30 jours (cette occurrence) ; ne plus proposer : le modèle entier ; rétablir : les deux. */
+export function opDecideSuggestion(s: DemoState, suggestionId: string, decision: 'snooze' | 'dismiss' | 'restore', today: string): OpResult {
+  const templateId = suggestionId.split(':')[0]!;
+  if (!templateById(templateId)) return err('Suggestion inconnue.');
+  const others = s.planning.decisions.filter((d) => d.id !== suggestionId && d.id !== templateId);
+  const add = decision === 'snooze' ? [{ id: suggestionId, status: 'snoozed' as const, until: addDays(today, SNOOZE_DAYS) }]
+    : decision === 'dismiss' ? [{ id: templateId, status: 'dismissed' as const }] : [];
+  const decisions = [...others, ...add];
+  if (decisions.length > DEMO_LIMITS.decisions) return err('Limite de la démonstration atteinte : réinitialisez-la pour continuer.');
+  return done({ ...s, planning: { ...s.planning, decisions } }, undefined);
+}
+
+export function opAddCalendarEvent(s: DemoState, e: { label: string; date: string; yearly: boolean }): OpResult {
+  if (s.planning.events.length >= DEMO_LIMITS.events) return err(`Démonstration limitée à ${DEMO_LIMITS.events} échéances personnalisées.`);
+  const event = { id: `evt-${s.seq + 1}`, label: e.label, date: e.date, yearly: e.yearly };
+  return done({ ...s, seq: s.seq + 1, planning: { ...s.planning, events: [...s.planning.events, event] } }, undefined);
+}
+
+export function opRemoveCalendarEvent(s: DemoState, eventId: string): OpResult {
+  if (!s.planning.events.some((e) => e.id === eventId)) return err('Échéance introuvable.');
+  return done({ ...s, planning: { ...s.planning, events: s.planning.events.filter((e) => e.id !== eventId) } }, undefined);
 }

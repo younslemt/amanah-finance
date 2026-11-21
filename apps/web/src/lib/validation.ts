@@ -93,7 +93,7 @@ export const hajjGoalSchema = z.object({
 // --- Projets universels (Sprint 5) ----------------------------------------------
 /** Identifiant de projet : UUID (mode réel, vérifié aussi par le dépôt) ou identifiant fictif de démonstration. */
 export const goalIdField = (message = 'Projet invalide.') => z.string().regex(/^[0-9a-zA-Z-]{3,64}$/, message);
-export const GOAL_KINDS = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal', 'hajj', 'omra'] as const;
+export const GOAL_KINDS = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal', 'hajj', 'omra', 'religious_other'] as const;
 /** Création : la catégorie est choisie une fois (elle ne change plus) ; nom facultatif (libellé de la catégorie). */
 export const goalSchema = z.object({
   kind: z.enum(GOAL_KINDS, { message: 'Choisissez une catégorie de projet.' }),
@@ -102,7 +102,13 @@ export const goalSchema = z.object({
   available: z.string().trim().optional().transform((v) => (v ? v : '0')).pipe(amount('Épargne disponible')),
   targetDate: isoDate('Date souhaitée'),
   monthlyCapacity: amount('Capacité mensuelle'),
+  /** Projet issu d'une suggestion (modèle du catalogue) : origine conservée, tout reste modifiable. */
+  templateId: z.string().optional().transform((v) => v || null).pipe(z.string().regex(/^[a-z0-9-]{2,40}$/, 'Modèle invalide.').nullable()),
+  occurrence: z.string().optional().transform((v) => (v ? Number(v) : null)).pipe(z.number().int().min(2000).max(2100).nullable()),
+  /** Reconduction d'un projet annuel (vérifiée côté serveur et en base). */
+  previousGoalId: z.string().optional().transform((v) => v || null).pipe(z.string().regex(/^[0-9a-zA-Z-]{3,64}$/, 'Projet précédent invalide.').nullable()),
 }).refine((d) => d.available <= d.target, { path: ['available'], message: 'L’épargne disponible dépasse le montant cible.' })
+  .refine((d) => d.kind !== 'religious_other' || d.name !== null, { path: ['name'], message: 'Donnez un nom à ce projet (par exemple : Ramadan).' })
   // Projet personnel : nom libre obligatoire (voyage, mariage, véhicule, création d'entreprise…)
   .refine((d) => d.kind !== 'personal' || d.name !== null, { path: ['name'], message: 'Donnez un nom à votre projet personnel (par exemple : Voyage).' });
 
@@ -344,3 +350,40 @@ export const liabilitySchema = z.object({
   outstanding: amount('Capital restant dû'),
   due12m: amount('Échéances des 12 prochains mois'),
 }).refine((d) => d.due12m <= d.outstanding, { path: ['due12m'], message: 'Les échéances à 12 mois ne peuvent pas dépasser le capital restant dû.' });
+
+// --- Suggestions de projets et calendrier familial ------------------------------
+const SUGGESTION_GROUP_VALUES = ['religious', 'family', 'finance', 'wealth'] as const;
+const yesNoUnknown = z.enum(['yes', 'no', 'unknown']).transform((v) => (v === 'unknown' ? null : v === 'yes'));
+const monthDay = z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'Format attendu : MM-JJ.');
+
+/** Préférences déclarées (jamais déduites). */
+export const planningPreferencesSchema = z.object({
+  groups: z.array(z.enum(SUGGESTION_GROUP_VALUES)).max(4),
+  interests: z.array(z.string().regex(/^[a-z0-9-]{2,40}$/)).max(30),
+  hasChildren: yesNoUnknown,
+  hasVehicle: yesNoUnknown,
+  schoolCalendar: z.enum(['be-fwb', 'be-vl', 'custom'], { message: 'Calendrier scolaire invalide.' }),
+  schoolStart: z.string().trim().optional().transform((v) => v || null).pipe(monthDay.nullable()),
+  schoolHolidays: z.string().trim().optional().transform((v) => v || null).pipe(monthDay.nullable()),
+}).refine((d) => d.schoolCalendar !== 'custom' || (d.schoolStart && d.schoolHolidays), { path: ['schoolStart'], message: 'Calendrier personnalisé : indiquez la rentrée et le début des vacances (MM-JJ).' });
+
+export const suggestionDecisionSchema = z.object({
+  suggestionId: z.string().regex(/^[a-z0-9-]{2,40}(:[0-9]{4})?$/, 'Suggestion invalide.'),
+  decision: z.enum(['snooze', 'dismiss', 'restore']),
+});
+
+/** Échéance : UUID (réel) ou identifiant fictif de démonstration. */
+export const calendarEventIdSchema = z.object({ id: goalIdField('Échéance invalide.') });
+
+export const calendarEventSchema = z.object({
+  label: z.string().trim().min(2, 'Libellé trop court.').max(80, 'Libellé trop long (80 caractères au plus).'),
+  date: isoDate('Date'),
+  yearly: z.string().optional().transform((v) => v === 'on' || v === 'yes'),
+});
+
+export const religiousDateConfirmationSchema = z.object({
+  type: z.enum(['ramadan', 'eid_al_fitr']),
+  year: z.string().regex(/^\d{4}$/).transform(Number),
+  date: isoDate('Date'),
+  source: z.string().trim().min(3, 'Indiquez la source de la confirmation (mosquée, autorité suivie…).').max(200),
+}).refine((d) => d.date.startsWith(`${d.year}-`), { path: ['date'], message: 'La date doit tomber dans l’année indiquée.' });
