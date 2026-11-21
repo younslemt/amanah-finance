@@ -8,14 +8,15 @@
 const CACHE = 'amanah-static-v1';
 const OFFLINE = '/hors-ligne';
 
+// Pas de skipWaiting ni de clients.claim : le service worker ne prend jamais le contrôle d'une
+// page déjà ouverte (aucune requête en cours, enregistrement compris, n'est interrompue) ;
+// il s'applique à la navigation suivante.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll([OFFLINE, '/icons/icon.svg'])).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll([OFFLINE, '/icons/icon.svg'])));
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-    .then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
 });
 
 self.addEventListener('fetch', (event) => {

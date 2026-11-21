@@ -23,8 +23,10 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
   if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
   await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await Promise.race([page.waitForURL(/cree=1/, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined)]);
+  await Promise.race([page.waitForURL(/cree=1/, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined),
+    page.getByTestId('erreur-page').waitFor({ timeout: 20_000 }).catch(() => undefined)]);
   expect(await form.getByRole('alert').allTextContents(), 'erreur affichée par le formulaire').toEqual([]);
+  expect(await page.getByTestId('erreur-page').count(), 'écran d’erreur (exception côté serveur ou réseau)').toBe(0);
   await expect(page).toHaveURL(/\/goals\/demo-\d+\?cree=1$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(g.name ?? g.category);
   return page.url().split('?')[0]!;
@@ -56,7 +58,8 @@ test('assistant de création : une étape à la fois, retour en arrière sans pe
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Mensualité prévue (€)').fill('150');
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel');
+  await expect(page.getByTestId('erreur-page')).toHaveCount(0);
+  await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel', { timeout: 15_000 });
   await expect(form.getByLabel('Nom du projet')).toBeVisible();
   await expect(form.getByLabel('Montant cible (€)')).toHaveValue('3 000');
 });

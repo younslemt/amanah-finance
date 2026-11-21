@@ -151,7 +151,9 @@ export async function fillEidWizard(page: Page, v: { sacrifice?: string; extras?
 
 /** Après un envoi : soit la redirection attendue, soit le message d'erreur du formulaire (affiché dans le rapport). */
 export async function expectRedirectOrShowError(page: Page, form: Locator, url: RegExp) {
-  await Promise.race([page.waitForURL(url, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined)]);
+  await Promise.race([page.waitForURL(url, { timeout: 20_000 }).catch(() => undefined), form.getByRole('alert').first().waitFor({ timeout: 20_000 }).catch(() => undefined),
+    page.getByTestId('erreur-page').waitFor({ timeout: 20_000 }).catch(() => undefined)]);
   expect(await form.getByRole('alert').allTextContents(), 'erreur affichée par le formulaire').toEqual([]);
+  expect(await page.getByTestId('erreur-page').count(), 'écran d’erreur (exception côté serveur ou réseau)').toBe(0);
   await expect(page).toHaveURL(url);
 }
