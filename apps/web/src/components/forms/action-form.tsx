@@ -32,6 +32,15 @@ export function ActionForm({
   const [announce, setAnnounce] = useState('');
 
   const steps = () => Array.from(formRef.current?.querySelectorAll<HTMLFieldSetElement>('[data-wizard-step]') ?? []);
+  /**
+   * Place le focus sur le premier champ d'une étape, sauf si la personne est déjà dans un champ
+   * de cette étape : déplacer le focus pendant une saisie enverrait les caractères ailleurs.
+   */
+  const focusStep = (i: number) => requestAnimationFrame(() => {
+    const target = steps()[i];
+    if (!target || (document.activeElement && target.contains(document.activeElement))) return;
+    target.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea')?.focus();
+  });
 
   // React 19 vide le formulaire après chaque envoi : en cas d'erreur, la saisie est conservée
   // (envoi par onSubmit) ; elle n'est effacée qu'après un enregistrement réussi.
@@ -62,12 +71,12 @@ export function ActionForm({
     const invalid = fields.find((f) => !f.checkValidity());
     if (invalid) { invalid.reportValidity(); invalid.focus(); return; }
     setStep(step + 1);
-    requestAnimationFrame(() => steps()[step + 1]?.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea')?.focus());
+    focusStep(step + 1);
   };
   const goBack = () => {
     if (step === null || step === 0) return;
     setStep(step - 1);
-    requestAnimationFrame(() => steps()[step - 1]?.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea')?.focus());
+    focusStep(step - 1);
   };
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -79,8 +88,6 @@ export function ActionForm({
       const all = steps();
       const idx = all.findIndex((f) => Array.from(f.querySelectorAll<HTMLInputElement>('input, select, textarea')).some((x) => !x.checkValidity()));
       if (idx >= 0) {
-        const bad = Array.from(all[idx]!.querySelectorAll<HTMLInputElement>('input, select, textarea')).find((x) => !x.checkValidity());
-        e.currentTarget.dataset.envoiBloque = `${bad?.name ?? '?'}:${bad?.validationMessage ?? ''}:${bad?.value ?? ''}`;
         setStep(idx);
         requestAnimationFrame(() => Array.from(steps()[idx]?.querySelectorAll<HTMLInputElement>('input, select, textarea') ?? []).find((x) => !x.checkValidity())?.reportValidity());
         return;
