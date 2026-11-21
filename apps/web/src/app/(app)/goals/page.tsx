@@ -21,9 +21,9 @@ const STORAGE_NOTICE = {
   outdated: 'Les données de démonstration enregistrées venaient d’une version précédente : les données fictives de départ ont été rétablies.',
 } as const;
 
-function AddGoalButton({ className }: { className?: string }) {
+function AddGoalButton({ className, testId = 'ajouter-objectif' }: { className?: string; testId?: string }) {
   return (
-    <Link href="/goals/nouveau" data-testid="ajouter-objectif"
+    <Link href="/goals/nouveau" data-testid={testId}
       className={`inline-flex items-center justify-center gap-2 rounded-xl bg-primary-800 px-5 py-3 text-base font-semibold text-ivory shadow-sm hover:bg-primary-700 ${className ?? ''}`}>
       <span aria-hidden="true" className="text-lg leading-none">＋</span> Ajouter un objectif
     </Link>
@@ -98,7 +98,7 @@ export default async function GoalsPage() {
       {open.length === 0 ? (
         <Card className="mt-4 text-center">
           <p className="mb-3 text-ink-muted">Aucun projet en cours. Hajj, études, logement, mariage, voyage… commencez par le premier.</p>
-          <AddGoalButton />
+          <AddGoalButton testId="ajouter-premier-objectif" />
         </Card>
       ) : <div className="mt-4 grid gap-4 md:grid-cols-2" data-testid="liste-projets">{open.map(card)}</div>}
 

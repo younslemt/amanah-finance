@@ -24,6 +24,9 @@ function fictitiousStatement(): string {
   const lines = ['Date;Montant;Libellé;Contrepartie;Compte contrepartie;Devise'];
   const fmt = (y: number, m: number, d: number) => `${String(d).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
   const amt = (c: number) => `${c < 0 ? '-' : ''}${Math.floor(Math.abs(c) / 100)},${String(Math.abs(c) % 100).padStart(2, '0')}`;
+  // Abonnements (téléphone, streaming) : jour du mois aligné sur aujourd'hui (28 au plus), pour qu'ils
+  // restent « actifs » (échéance de moins de 45 jours) quel que soit le jour d'exécution du test
+  const subDay = Math.min(28, today.getUTCDate());
   for (let i = 6; i >= 1; i--) {
     const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
     const y = d.getUTCFullYear(), m = d.getUTCMonth();
@@ -32,8 +35,8 @@ function fictitiousStatement(): string {
       `${fmt(y, m, 1)};${amt(280_000)};VIREMENT SALAIRE EMPLOYEUR FICTIF;Employeur Fictif SA;;EUR`,
       `${fmt(y, m, 2)};${amt(-95_000)};LOYER APPARTEMENT FICTIF;Proprietaire Fictif;;EUR`,
       `${fmt(y, m, 5)};${amt(-11_000)};ENGIE FICTIF;Engie Fictif;;EUR`,
-      `${fmt(y, m, 6)};${amt(-4_500)};PROXIMUS FICTIF;Proximus Fictif;;EUR`,
-      `${fmt(y, m, 10)};${amt(-1_299)};STREAMING FICTIF;Streaming Fictif;;EUR`,
+      `${fmt(y, m, subDay)};${amt(-4_500)};PROXIMUS FICTIF;Proximus Fictif;;EUR`,
+      `${fmt(y, m, subDay)};${amt(-1_299)};STREAMING FICTIF;Streaming Fictif;;EUR`,
       `${fmt(y, m, 8)};${amt(-18_000)};DELHAIZE FICTIF;Delhaize Fictif;;EUR`,
       `${fmt(y, m, 20)};${amt(-16_000)};COLRUYT FICTIF;Colruyt Fictif;;EUR`,
       `${fmt(y, m, 15)};${amt(-(4_000 + k * 1_500))};RESTAURANT FICTIF ${k};Restaurant Fictif ${k};;EUR`,
