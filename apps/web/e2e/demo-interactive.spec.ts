@@ -8,6 +8,19 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const euros = (s: string) => new RegExp(s.replace(/ /g, '[\\s\\u00a0\\u202f]'));
 
+/** Journal de diagnostic : erreurs console, requêtes en échec et envois (POST), joint au rapport en cas d'échec. */
+function watch(page: Page): string[] {
+  const log: string[] = [];
+  const t0 = Date.now();
+  const at = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') log.push(`${at()} console.${m.type()} ${m.text().slice(0, 300)}`); });
+  page.on('pageerror', (e) => log.push(`${at()} pageerror ${e.message.slice(0, 300)}`));
+  page.on('requestfailed', (r) => log.push(`${at()} échec ${r.method()} ${r.url()} ${r.failure()?.errorText ?? ''}`));
+  page.on('response', (r) => { if (r.request().method() === 'POST') log.push(`${at()} POST ${r.status()} ${r.url()}`); });
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) log.push(`${at()} navigation ${f.url()}`); });
+  return log;
+}
+
 async function addGoal(page: Page, g: { category: string; name?: string; target: string; available?: string; monthly: string }) {
   await page.goto('/goals');
   await page.getByTestId('ajouter-objectif').click();
@@ -33,6 +46,7 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
 }
 
 test('assistant de création : une étape à la fois, retour en arrière sans perte de saisie', async ({ page }) => {
+  const log = watch(page);
   await page.goto('/goals/nouveau');
   const form = page.getByTestId('form-objectif');
   const steps = form.getByTestId('etape-formulaire');
@@ -58,8 +72,17 @@ test('assistant de création : une étape à la fois, retour en arrière sans pe
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Mensualité prévue (€)').fill('150');
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  await expect(page.getByTestId('erreur-page')).toHaveCount(0);
-  await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel', { timeout: 15_000 });
+  try {
+    await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel', { timeout: 15_000 });
+  } catch (e) {
+    const state = await page.evaluate(() => ({
+      erreurPage: !!document.querySelector('[data-testid="erreur-page"]'),
+      boutons: Array.from(document.querySelectorAll('[data-testid="form-objectif"] button')).map((b) => `${b.textContent}|${(b as HTMLButtonElement).type}|${(b as HTMLButtonElement).disabled}`),
+      etapes: Array.from(document.querySelectorAll('[data-wizard-step]')).map((f) => (f as HTMLElement).hidden),
+      sw: navigator.serviceWorker?.controller ? 'contrôlée' : 'non contrôlée',
+    }));
+    throw new Error(`${(e as Error).message}\nÉtat : ${JSON.stringify(state)}\nJournal :\n${log.join('\n')}`);
+  }
   await expect(form.getByLabel('Nom du projet')).toBeVisible();
   await expect(form.getByLabel('Montant cible (€)')).toHaveValue('3 000');
 });
