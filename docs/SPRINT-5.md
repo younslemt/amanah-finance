@@ -107,4 +107,7 @@ Détails complets : `docs/DEMO-INTERACTIVE.md`.
 2. **Calendriers scolaires** : approximations conservées comme indicatives ; registre de calendriers officiels versionnés par année scolaire et communauté (vide tant qu'aucune source officielle n'est vérifiée) ; dates corrigées par la personne jamais écrasées par un recalcul.
 3. **Date de référence de la démonstration** : `DEMO_AS_OF` par défaut (tests déterministes) ; page `/simulation` avec quatre moments de l'année et une date libre ; toutes les échéances recalculées ; données fictives uniquement.
 
-Détails : `docs/SUGGESTIONS-CALENDRIER.md` (section 8) et `docs/DEMO-INTERACTIVE.md`.
+4. **Événements religieux strictement privés** (migration `0025`) : le partage religieux global ne rend plus visibles les événements religieux du calendrier aux autres membres consentants ; testé avec deux membres consentants ayant activé le partage.
+5. **Gouvernance des méthodologies** : registre `docs/METHODOLOGIES-GOUVERNANCE.md` — six méthodologies recensées, toutes provisoires ; aucune certification ni validation revendiquée.
+
+Détails : `docs/SUGGESTIONS-CALENDRIER.md` (section 8), `docs/DEMO-INTERACTIVE.md`, `docs/METHODOLOGIES-GOUVERNANCE.md`.

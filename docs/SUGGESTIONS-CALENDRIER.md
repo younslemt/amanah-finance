@@ -170,13 +170,14 @@ Trois sortes d'événements ajoutés, choisies **explicitement** dans le formula
 |---|---|---|---|
 | Personnel (par défaut) | `visibility = 'private'` | son auteur seulement | son auteur |
 | Familial partagé volontairement | `visibility = 'household'` | tout le foyer | membres avec droit d'écriture (sans pouvoir le rendre privé ni se l'approprier) |
-| Religieux personnalisé | `religious = true` (toujours `private`) | son auteur, **avec consentement article 9** | son auteur, avec consentement |
+| Religieux personnalisé | `religious = true` (toujours `private`) | son auteur **seulement**, avec consentement article 9 — le partage religieux global (`share_with_household`) ne s'applique pas (migration `0025`) | son auteur, avec consentement |
 
 - Le caractère religieux n'est **jamais déduit du libellé** : seule la case « Événement religieux » le classe (affichée seulement avec le consentement). Un libellé comme « Fête de l'Aïd chez les cousins » sans la case reste un événement ordinaire (testé).
 - Base : contraintes `calendar_events_religious_private` et `calendar_events_private_owner`, fonctions `calendar_event_readable` / `calendar_event_writable` (réutilisent `religious_readable` / `religious_writable`), trigger `calendar_events_keep_author` (auteur et foyer non modifiables), `created_by = auth.uid()` exigé à l'insertion.
 - Retrait du consentement avec effacement : `erase_my_religious_data()` supprime les événements religieux créés par la personne (`calendar_events` dans le résultat) et conserve les autres.
 - Événements existants avant la migration : restent partagés avec le foyer (comportement antérieur) ; nouveaux événements : personnels par défaut.
-- Tests d'isolation dans un même foyer : `supabase/tests/calendar_privacy.test.sql` (21 contrôles — Hana avec consentement, Idris même foyer sans consentement, Jad autre foyer).
+- Migration `0025` : `calendar_event_readable` exige que la personne connectée soit l'auteur d'un événement religieux, même si l'auteur a activé le partage global de ses données religieuses. Un partage volontaire événement par événement pourra être étudié plus tard. Les autres données religieuses partagées (projets, purification…) suivent toujours `religious_readable`.
+- Tests d'isolation dans un même foyer : `supabase/tests/calendar_privacy.test.sql` (30 contrôles — Hana avec consentement, Idris du même foyer d'abord sans consentement puis avec consentement et partage global activé des deux côtés, Jad d'un autre foyer). Sans la migration `0025`, trois de ces contrôles échouent : la fuite était réelle.
 
 ### 8.2 Calendriers scolaires officiels
 

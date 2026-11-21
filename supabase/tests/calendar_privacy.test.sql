@@ -1,5 +1,5 @@
 -- =============================================================================
--- Revue finale Sprint 5 : confidentialité du calendrier familial (migration 0024). Utilisateurs fictifs : Hana (propriétaire,
+-- Revue finale Sprint 5 : confidentialité du calendrier familial (migrations 0024 et 0025). Utilisateurs fictifs : Hana (propriétaire,
 -- consentement article 9), Idris (membre du même foyer, SANS consentement),
 -- Jad (autre foyer). Montants fictifs.
 -- =============================================================================
@@ -81,11 +81,34 @@ select pg_temp.check_val('Jad ne voit rien du foyer', $q$select count(*)::text f
 select pg_temp.expect('Jad : écriture dans un autre foyer refusée', format($q$
   insert into public.calendar_events (household_id, label, event_date, visibility) values (%L, 'Intrus', date '2027-03-09', 'household')$q$, current_setting('t.hh')), false);
 
+-- Deux membres consentants avec partage religieux global : les événements religieux restent strictement privés
+reset role;
+insert into public.consents (user_id, kind, granted, document_version, document_hash)
+values ('00000000-0000-0000-0000-0000000000a2', 'special_category', true, 'test', repeat('b', 64));
+insert into public.religious_preferences (user_id, share_with_household)
+values ('00000000-0000-0000-0000-0000000000a1', true), ('00000000-0000-0000-0000-0000000000a2', true)
+on conflict (user_id) do update set share_with_household = true;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a2';
+select pg_temp.check_val('partage global actif : Idris lit les données religieuses partagées de Hana', format($q$select public.religious_readable(%L, '00000000-0000-0000-0000-0000000000a1')::text$q$, current_setting('t.hh')), 'true');
+select pg_temp.expect('Idris (consentant) : événement religieux personnel', format($q$
+  insert into public.calendar_events (household_id, label, event_date, religious) values (%L, 'Veillée d''Idris', date '2027-03-12', true)$q$, current_setting('t.hh')), true);
+select pg_temp.check_val('partage global : Idris ne voit pas l''événement religieux de Hana', $q$select string_agg(label, ',' order by label) from public.calendar_events$q$, 'Anniversaire familial (modifié),Veillée d''Idris');
+select pg_temp.check_val('partage global : lecture directe de l''événement religieux de Hana impossible', $q$select count(*)::text from public.calendar_events where label = 'Veillée fictive'$q$, '0');
+select pg_temp.expect('partage global : Idris ne modifie pas l''événement religieux de Hana (sans effet)', $q$update public.calendar_events set label = 'Modifié' where label = 'Veillée fictive'$q$, true);
+select pg_temp.expect('partage global : Idris ne supprime pas l''événement religieux de Hana (sans effet)', $q$delete from public.calendar_events where label = 'Veillée fictive'$q$, true);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_val('partage global : Hana ne voit pas l''événement religieux d''Idris', $q$select string_agg(label, ',' order by label) from public.calendar_events$q$, 'Anniversaire familial (modifié),Rendez-vous personnel fictif,Veillée fictive');
+reset role;
+select pg_temp.check_val('l''événement religieux de Hana est intact', $q$select count(*)::text from public.calendar_events where label = 'Veillée fictive'$q$, '1');
+set role authenticated;
+
 -- Retrait du consentement de Hana : ses événements religieux sont supprimés, le reste conservé
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
 select pg_temp.check_val('effacement : événements religieux supprimés', $q$select (public.erase_my_religious_data() ->> 'calendar_events')$q$, '1');
 reset role;
-select pg_temp.check_val('événements non religieux conservés', $q$select string_agg(label, ',' order by label) from public.calendar_events$q$, 'Anniversaire familial (modifié),Rendez-vous personnel fictif');
+select pg_temp.check_val('événements non religieux conservés', $q$select string_agg(label, ',' order by label) from public.calendar_events where not religious$q$, 'Anniversaire familial (modifié),Rendez-vous personnel fictif');
+select pg_temp.check_val('événement religieux d''Idris conservé (effacement limité à Hana)', $q$select string_agg(label, ',') from public.calendar_events where religious$q$, 'Veillée d''Idris');
 
 do $$
 declare r record; failures int := 0;
