@@ -155,3 +155,30 @@ Elle affiche clairement : **aucun partenaire référencé, aucune offre, aucune 
 - `goals.plan_confirmed_on`, `goals.strategy_monthly_cents`, `goals.strategy_chosen_on`. Une stratégie est soit complète, soit absente. Ces champs sont journalisés par `log_goal_change`.
 - `goal_allocations.source` (`initial` ou `manual`, `manual` par défaut). Les données existantes sont reprises. Les deux fonctions de création marquent l’épargne initiale.
 - Signatures des fonctions, RLS et article 9 inchangés. Tests : `supabase/tests/goals_journey.test.sql`.
+
+## 8. Défauts trouvés et corrigés pendant la recette
+
+- **Saisie détournée dans l’assistant.** Le focus était replacé sur le premier champ de l’étape une image après « Suivant ». Une saisie déjà commencée dans un autre champ de la même étape partait alors dans le mauvais champ. Le diagnostic CI l’a montré : « 0200 » dans l’épargne disponible, mensualité vide. Le focus n’est désormais jamais déplacé quand la personne est déjà dans un champ de l’étape. Un test de non-régression a été ajouté.
+- **Envoi incomplet.** Tout envoi vérifie d’abord l’ensemble des étapes. Un champ obligatoire vide ramène à l’étape concernée, sans appel au serveur. Les boutons « Suivant » et « Créer » ne sont jamais remplacés l’un par l’autre sous le clic.
+- **Service worker.** Il ne prend plus le contrôle d’une page déjà ouverte : il s’applique à la navigation suivante.
+- **Test Sprint 3 dépendant de la date.** L’abonnement fictif du 6 du mois devenait « inactif » après le 21. Le jeu de données s’aligne désormais sur le jour d’exécution.
+
+## 9. Résultats (CI de `d3e0c32`, 4 jobs verts, job applicatif relancé une 2e fois sans échec)
+
+| Suite | Résultat |
+| --- | --- |
+| Moteurs | 140 tests réussis (parcours, scénarios, capacité par projet) |
+| Banque fictive | 13 tests réussis |
+| Application (`apps/web`) | 107 tests réussis, dont 7 sur le dépôt de démonstration |
+| SQL, RLS et isolation (PostgreSQL 16 et image Supabase) | Toutes les assertions passent, dont `goals_journey` (23 contrôles) |
+| Playwright démo, mobile et ordinateur | 75 réussis, 1 ignoré (test clavier, ordinateur seul, existant). Aucun test instable sur les 2 exécutions. |
+| Playwright réel (Supabase local), mobile et ordinateur | 68 réussis |
+
+## 10. Lancer la nouvelle démonstration sous Windows
+
+```bat
+git pull
+scripts\windows\lancer-demo.cmd
+```
+
+L’état de démonstration est propre à chaque navigateur. Pour repartir des données fictives de départ, utilisez Projets → « Réinitialiser la démonstration ».
