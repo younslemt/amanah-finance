@@ -106,7 +106,7 @@ test('calendrier familial : dates indicatives, confirmation, échéance personna
   await confirm.getByLabel('Date retenue').fill('2027-02-08');
   await confirm.getByLabel('Source').fill('Mosquée fictive du quartier');
   await confirm.getByRole('button', { name: 'Confirmer' }).click();
-  await expect(page.locator('[data-testid="evenement"][data-type="ramadan"]').first()).toContainText('confirmée par vous');
+  await expect(page.locator('[data-testid="evenement"][data-type="ramadan"]').first()).toContainText('confirmée ou corrigée par vous');
   await expect(page.locator('[data-testid="evenement"][data-type="ramadan"]').first()).not.toContainText('indicative');
   // Échéance personnalisée : ajoutée puis retirée, sans créer de projet
   const add = page.getByTestId('form-evenement');
