@@ -17,15 +17,17 @@ export function ZakatStatusList({ view, title = 'Zakat' }: { view: ZakatStatusVi
               <span className="font-medium">{l.label}</span>
               <span className="block text-xs text-ink-muted">{l.hint}</span>
             </dt>
-            <dd className="tabular whitespace-nowrap font-semibold">{l.cents === null ? 'non renseignée' : formatCents(l.cents)}</dd>
+            <dd className="tabular whitespace-nowrap font-semibold">{l.cents === null ? (l.kind === 'estimated' ? 'à compléter' : 'non renseignée') : formatCents(l.cents)}</dd>
           </div>
         ))}
       </dl>
-      <div className="flex items-baseline justify-between rounded-xl bg-primary-50 p-3" data-testid="zakat-reste">
-        <span className="text-sm font-semibold text-primary-700">Reste estimé à verser</span>
-        <span className="tabular text-2xl font-semibold text-primary-900">{formatCents(view.remainingCents)}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-primary-50 p-3" data-testid="zakat-reste" data-complete={view.complete ? 'yes' : 'no'}>
+        <span className="text-sm font-semibold text-primary-700">{view.remainingLabel}</span>
+        {view.remainingCents === null
+          ? <span className="text-sm text-ink-muted">Non déterminé tant que le calcul est incomplet</span>
+          : <span className="tabular text-2xl font-semibold text-primary-900">{formatCents(view.remainingCents)}</span>}
       </div>
-      {view.excessCents > 0 ? <p className="text-xs text-ink-muted">Contributions au-delà du montant estimé : {formatCents(view.excessCents)}.</p> : null}
+      {view.excessCents !== null && view.excessCents > 0 ? <p className="text-xs text-ink-muted">Contributions au-delà du montant estimé : {formatCents(view.excessCents)}.</p> : null}
       <p className="text-xs text-ink-muted">La provision prépare un paiement, elle n’en est pas un : elle n’est jamais déduite. Chaque contribution n’est comptée qu’une fois.</p>
     </div>
   );

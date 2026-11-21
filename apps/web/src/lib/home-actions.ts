@@ -6,6 +6,8 @@
  * Règles :
  * - les libellés invitent à examiner : jamais d'obligation religieuse ni de conseil réglementé ;
  * - sans consentement religieux, aucune passerelle religieuse (même si des données arrivaient) ;
+ * - le NOM d'un projet religieux (Hajj, Omra, Aïd…) révèle une conviction : il n'apparaît jamais
+ *   sans consentement, ni dans une observation, ni dans une destination ;
  * - chaque destination est un écran existant (vérifié par les tests).
  */
 import { formatCents, formatDate } from './format.ts';
@@ -32,8 +34,8 @@ export interface HomeActionInput {
   purificationPendingCount: number;
   /** État du calcul de Zakat (null : aucun calcul possible, rien à signaler). */
   zakat: { state: ZakatObservation; hawlEndsOn?: string } | null;
-  /** Projets en retard sur leur plan (parcours existant). */
-  lateGoals: ReadonlyArray<{ id: string; name: string }>;
+  /** Projets en retard sur leur plan (parcours existant) ; `religious` : catégorie religieuse du projet. */
+  lateGoals: ReadonlyArray<{ id: string; name: string; religious: boolean }>;
   /** Événements à venir du calendrier familial, avec la suggestion correspondante s'il y en a une. */
   upcomingEvents: ReadonlyArray<{ id: string; label: string; date: string; religious: boolean; hasGoal: boolean; suggestionHref: string | null }>;
   /** Capacité d'épargne mensuelle encore disponible (plan d'épargne). */
@@ -66,7 +68,9 @@ export function homeActions(input: HomeActionInput, limit = 3): HomeAction[] {
     out.push({ id: 'purification', kind: 'purification', observation: n === 1 ? '1 intérêt détecté à examiner' : `${n} intérêts détectés à examiner`, cta: 'Examiner la purification', href: '/purification', religious: true });
   }
   for (const g of input.lateGoals) {
-    out.push({ id: `late:${g.id}`, kind: 'late_goal', observation: `${g.name} : en retard sur son plan`, cta: 'Comparer les scénarios', href: `/goals/${encodeURIComponent(g.id)}`, religious: false });
+    // Projet religieux sans consentement : ni son nom ni son lien ne sont exposés
+    if (g.religious && !religious) continue;
+    out.push({ id: `late:${g.id}`, kind: 'late_goal', observation: `${g.name} : en retard sur son plan`, cta: 'Comparer les scénarios', href: `/goals/${encodeURIComponent(g.id)}`, religious: g.religious });
   }
   for (const e of input.upcomingEvents) {
     if (e.religious && !religious) continue;

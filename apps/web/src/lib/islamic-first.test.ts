@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { zakatSettlements, type Contribution } from '@amanah/engines';
+import { zakatSettlements, type Contribution, type Settlement } from '@amanah/engines';
 import { DEFAULT_HOME_LAYOUT, navEntries, parseHomeLayout, resolvePresentation } from './presentation.ts';
 import { zakatStatusView } from './zakat-status.ts';
 import { EVENT_HORIZON_DAYS, homeActions, type HomeActionInput } from './home-actions.ts';
@@ -58,29 +58,47 @@ describe('présentation Islamic-first', () => {
 
 describe('Zakat : estimé, provision, déclaré, rapproché, confirmé', () => {
   const c = (id: string, cents: number, extra: Partial<Contribution> = {}): Contribution => ({ id, kind: 'zakat', amountCents: cents, paidOn: '2026-11-15', zakatCalculationId: 'calc', ...extra });
+  const fromSettlement = (s: Settlement, provisionCents: number | null) => zakatStatusView({
+    estimate: { complete: true, dueCents: s.dueCents }, paidCents: s.paidCents, bankMatchedPaidCents: s.bankMatchedPaidCents, confirmedPaidCents: s.confirmedPaidCents, provisionCents,
+  });
 
-  it('la provision ne réduit jamais le reste à verser ; aucun double comptage', () => {
+  it('la provision ne réduit jamais le montant restant ; aucun double comptage', () => {
     const contributions = [c('a', 30_000, { transactionId: 'tx1' }), c('b', 10_000), c('a', 30_000, { transactionId: 'tx1' })]; // « a » chargée deux fois
     const [s] = zakatSettlements([{ id: 'calc', dueCents: 104_200 }], contributions);
-    const v = zakatStatusView(s!, 60_000);
+    const v = fromSettlement(s!, 60_000);
     expect(v.lines.map((l) => [l.kind, l.cents])).toEqual([['estimated', 104_200], ['provision', 60_000], ['declared', 40_000], ['bank_matched', 30_000], ['confirmed', 0]]);
+    expect(v.remainingLabel).toBe('Montant restant selon vos déclarations');
     expect(v.remainingCents).toBe(64_200); // 1 042 € − 400 € ; la provision de 600 € n'est pas déduite
     expect(v.provisionCoversRemaining).toBe(false);
     expect(v.lines.filter((l) => l.subsetOfDeclared).map((l) => l.kind)).toEqual(['bank_matched', 'confirmed']);
     expect(v.lines.find((l) => l.kind === 'provision')!.hint).toContain('pas un paiement');
+    expect(v.lines.find((l) => l.kind === 'estimated')!.hint).toContain('Estimation');
   });
 
   it('provision seule : rien n’est considéré comme payé', () => {
-    const v = zakatStatusView({ dueCents: 50_000, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0 }, 50_000);
+    const v = zakatStatusView({ estimate: { complete: true, dueCents: 50_000 }, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0, provisionCents: 50_000 });
     expect(v.remainingCents).toBe(50_000);
     expect(v.provisionCoversRemaining).toBe(true);
-    expect(zakatStatusView({ dueCents: 50_000, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0 }, null).provisionCoversRemaining).toBe(null);
+  });
+
+  it('calcul incomplet : aucun montant estimé ni restant présenté comme établi ; le déclaré reste visible', () => {
+    for (const reason of ['missing_choices', 'price_stale', 'no_calculation'] as const) {
+      const v = zakatStatusView({ estimate: { complete: false, reason }, paidCents: 20_000, bankMatchedPaidCents: 0, confirmedPaidCents: 0, provisionCents: 30_000 });
+      expect(v.complete).toBe(false);
+      expect(v.incompleteReason).toBe(reason);
+      expect(v.remainingCents).toBe(null);
+      expect(v.excessCents).toBe(null);
+      expect(v.provisionCoversRemaining).toBe(null);
+      expect(v.lines.find((l) => l.kind === 'estimated')!.cents).toBe(null);
+      expect(v.lines.find((l) => l.kind === 'declared')!.cents).toBe(20_000);
+    }
   });
 
   it('excédent signalé ; incohérences refusées', () => {
-    expect(zakatStatusView({ dueCents: 10_000, paidCents: 12_000, bankMatchedPaidCents: 0, confirmedPaidCents: 0 }, null)).toMatchObject({ remainingCents: 0, excessCents: 2_000 });
-    expect(() => zakatStatusView({ dueCents: 10_000, paidCents: 5_000, bankMatchedPaidCents: 4_000, confirmedPaidCents: 2_000 }, null)).toThrow();
-    expect(() => zakatStatusView({ dueCents: 10_000, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0 }, -1)).toThrow();
+    expect(zakatStatusView({ estimate: { complete: true, dueCents: 10_000 }, paidCents: 12_000, bankMatchedPaidCents: 0, confirmedPaidCents: 0, provisionCents: null })).toMatchObject({ remainingCents: 0, excessCents: 2_000 });
+    expect(() => zakatStatusView({ estimate: { complete: true, dueCents: 10_000 }, paidCents: 5_000, bankMatchedPaidCents: 4_000, confirmedPaidCents: 2_000, provisionCents: null })).toThrow();
+    expect(() => zakatStatusView({ estimate: { complete: true, dueCents: 10_000 }, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0, provisionCents: -1 })).toThrow();
+    expect(() => zakatStatusView({ estimate: { complete: true, dueCents: 10.5 }, paidCents: 0, bankMatchedPaidCents: 0, confirmedPaidCents: 0, provisionCents: null })).toThrow();
   });
 });
 
@@ -88,7 +106,7 @@ describe('passerelles entre observations et actions', () => {
   const base: HomeActionInput = {
     religiousEnabled: true, asOf: '2026-11-09', purificationPendingCount: 3,
     zakat: { state: 'hawl_due_soon', hawlEndsOn: '2026-11-20' },
-    lateGoals: [{ id: 'goal-omra', name: 'Omra en famille' }],
+    lateGoals: [{ id: 'goal-omra', name: 'Omra en famille', religious: true }, { id: 'goal-etudes', name: 'Études de Yasmine', religious: false }],
     upcomingEvents: [
       { id: 'eid_al_adha:2027', label: 'Aïd al-Adha', date: '2027-02-20', religious: true, hasGoal: false, suggestionHref: '/goals/nouveau?modele=aid-al-adha&occurrence=2027' },
       { id: 'school_start:2027', label: 'Rentrée scolaire', date: '2027-08-30', religious: false, hasGoal: false, suggestionHref: '/goals/nouveau?modele=rentree-scolaire&occurrence=2027' },
@@ -98,8 +116,8 @@ describe('passerelles entre observations et actions', () => {
 
   it('les cinq passerelles, par priorité, vers des écrans existants', () => {
     const all = homeActions(base, 10);
-    expect(all.map((a) => a.kind)).toEqual(['zakat', 'purification', 'late_goal', 'upcoming_event', 'available_capacity']);
-    expect(all.map((a) => a.cta)).toEqual(['Accéder au calcul', 'Examiner la purification', 'Comparer les scénarios', 'Préparer un objectif', 'Revoir mes projets']);
+    expect(all.map((a) => a.kind)).toEqual(['zakat', 'purification', 'late_goal', 'late_goal', 'upcoming_event', 'available_capacity']);
+    expect(all.map((a) => a.cta)).toEqual(['Accéder au calcul', 'Examiner la purification', 'Comparer les scénarios', 'Comparer les scénarios', 'Préparer un objectif', 'Revoir mes projets']);
     for (const a of all) expect(routeExists(a.href)).toBe(true);
     // Rentrée au-delà de l'horizon : pas encore proposée
     expect(all.some((a) => a.id === 'event:school_start:2027')).toBe(false);
@@ -117,7 +135,10 @@ describe('passerelles entre observations et actions', () => {
   it('sans consentement : aucune passerelle religieuse, même si des données arrivent', () => {
     const off = homeActions({ ...base, religiousEnabled: false }, 10);
     expect(off.every((a) => !a.religious)).toBe(true);
-    expect(off.map((a) => a.kind)).toEqual(['late_goal', 'available_capacity']);
+    expect(off.map((a) => a.id)).toEqual(['late:goal-etudes', 'capacity']);
+    // Le nom d'un projet religieux n'apparaît nulle part, ni dans un lien
+    const text = JSON.stringify(off);
+    for (const leak of ['Omra', 'goal-omra', 'Aïd', 'aid-al-adha']) expect(text.includes(leak)).toBe(false);
   });
 
   it('rien à signaler : aucune action', () => {
