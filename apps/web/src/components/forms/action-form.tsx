@@ -30,6 +30,7 @@ export function ActionForm({
   const [step, setStep] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [announce, setAnnounce] = useState('');
+
   const steps = () => Array.from(formRef.current?.querySelectorAll<HTMLFieldSetElement>('[data-wizard-step]') ?? []);
 
   // React 19 vide le formulaire après chaque envoi : en cas d'erreur, la saisie est conservée
@@ -72,6 +73,17 @@ export function ActionForm({
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (wizard && !isLast) { goNext(); return; } // « Entrée » au milieu du parcours : étape suivante
+    // Jamais d'envoi incomplet : un champ obligatoire vide (par exemple un envoi déclenché par le
+    // clic même qui a ouvert la dernière étape, ou un double clic) ramène à l'étape à compléter
+    if (wizard && step !== null) {
+      const all = steps();
+      const idx = all.findIndex((f) => Array.from(f.querySelectorAll<HTMLInputElement>('input, select, textarea')).some((x) => !x.checkValidity()));
+      if (idx >= 0) {
+        setStep(idx);
+        requestAnimationFrame(() => Array.from(steps()[idx]?.querySelectorAll<HTMLInputElement>('input, select, textarea') ?? []).find((x) => !x.checkValidity())?.reportValidity());
+        return;
+      }
+    }
     const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
     startTransition(() => formAction(fd));
   };
@@ -100,18 +112,16 @@ export function ActionForm({
             ← Précédent
           </button>
         ) : null}
-        {wizard && !isLast ? (
-          // Clés distinctes : React ne doit jamais transformer le bouton « Suivant » cliqué en bouton
-          // d'envoi (le navigateur enverrait alors le formulaire avant la dernière saisie)
-          <button key="suivant" type="button" onClick={goNext} className={cn('rounded-lg px-4 py-2.5 text-sm font-medium', buttonClass)} data-testid="etape-suivante">
+        {/* Boutons toujours présents, seulement masqués : aucun élément n'est remplacé sous le clic */}
+        {wizard ? (
+          <button key="suivant" type="button" onClick={goNext} hidden={isLast} className={cn('rounded-lg px-4 py-2.5 text-sm font-medium', buttonClass)} data-testid="etape-suivante">
             Suivant →
           </button>
-        ) : (
-          <button key="envoyer" type="submit" disabled={pending}
-            className={cn('rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-60', buttonClass)}>
-            {pending ? 'Enregistrement…' : submitLabel}
-          </button>
-        )}
+        ) : null}
+        <button key="envoyer" type="submit" disabled={pending} hidden={wizard && !isLast}
+          className={cn('rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-60', buttonClass)}>
+          {pending ? 'Enregistrement…' : submitLabel}
+        </button>
       </div>
     </form>
   );
