@@ -96,7 +96,7 @@ jobs:
           echo "HTTP /dashboard : $code"
           if [ "$code" != "200" ]; then echo "----- start.log -----"; cat start.log; exit 1; fi
           curl -sI http://localhost:3000/dashboard | grep -i "content-security-policy"
-          curl -s http://localhost:3000/dashboard | grep -q "Mode démonstration"
+          curl -s http://localhost:3000/dashboard -o dashboard.html && grep -q "Mode démonstration" dashboard.html
           # Le serveur reste démarré : les tests Playwright l'utilisent (reuseExistingServer).
 
       - name: Navigateur Playwright

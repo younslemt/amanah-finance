@@ -9,8 +9,17 @@ const SCREENS = [
   { path: '/dashboard', heading: 'Assalamu alaykum', nav: 'Accueil' },
   { path: '/budget', heading: 'Budget', nav: 'Budget' },
   { path: '/budget/optimiser', heading: 'Optimiser mon budget', nav: 'Budget' },
+  { path: '/budget/plan-epargne', heading: 'Plan d’épargne des projets', nav: 'Budget' },
   { path: '/recommandations', heading: 'Mes recommandations', nav: 'Accueil' },
   { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
+  { path: '/goals/goal-hajj', heading: 'Hajj en couple', nav: 'Projets' },
+  { path: '/goals/goal-aid', heading: 'Aïd al-Adha 2027', nav: 'Projets' },
+  { path: '/goals/nouveau', heading: 'Ajouter un objectif', nav: 'Projets' },
+  { path: '/goals/goal-hajj/solutions', heading: 'Explorer les solutions pour concrétiser mon projet', nav: 'Projets' },
+  { path: '/goals/aid', heading: 'Préparer mon Aïd', nav: 'Projets' },
+  { path: '/goals/calendrier', heading: 'Calendrier financier familial', nav: 'Projets' },
+  { path: '/goals/preferences', heading: 'Préférences des suggestions', nav: 'Projets' },
+  { path: '/goals/nouveau?mode=modele', heading: 'Ajouter un objectif', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
   { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
   { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
@@ -64,7 +73,7 @@ for (const s of SCREENS) {
     expect(overflow, 'défilement horizontal').toBeLessThanOrEqual(0);
     expect(await contrastFailures(page)).toEqual([]);
     expect(errors).toEqual([]);
-    await page.screenshot({ path: test.info().outputPath(`${s.path.slice(1)}.png`), fullPage: true });
+    await page.screenshot({ path: test.info().outputPath(`${s.path.slice(1).replace(/[^a-z0-9/-]/gi, '_')}.png`), fullPage: true });
   });
 }
 
@@ -105,6 +114,17 @@ test('les statuts de conformité reflètent les informations disponibles', async
   await page.goto('/goals');
   await expect(page.getByText('Rythme à déterminer').first()).toBeVisible();
   await expect(page.getByText('En retard').first()).toBeVisible();
+  await expect(page.getByTestId('parcours-projet').first()).toBeVisible();
+  await page.goto('/goals/goal-hajj?s1=500');
+  await expect(page.getByTestId('scenario')).toHaveCount(1);
+  await expect(page.getByTestId('resultat-simulation')).toContainText('500,00');
+  await expect(page.getByText('Simulation seulement : rien n’est enregistré')).toBeVisible();
+  await expect(page.getByTestId('historique-affectations')).toContainText('500,00');
+  await page.goto('/goals/goal-aid');
+  await expect(page.getByTestId('budget-aid')).toContainText('330,00');
+  await expect(page.getByTestId('date-aid')).toContainText('Saisie, non confirmée');
+  await expect(page.getByTestId('date-aid')).toContainText('non officielle');
+  await expect(page.getByTestId('reconduction-aid')).toContainText('Disponible après la réalisation');
 });
 
 test('la connexion est désactivée en démonstration', async ({ page }) => {

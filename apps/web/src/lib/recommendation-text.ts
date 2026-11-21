@@ -18,10 +18,12 @@ export const RULE_TITLE: Record<Recommendation['ruleId'], string> = {
   R4: 'Capacité d’épargne non affectée',
   R5: 'Une catégorie pèse lourd dans vos dépenses',
   R6: 'Abonnements à revoir',
+  R7: 'Projet en retard',
 };
 
 const n = (v: unknown) => Number(v);
 const cat = (v: unknown) => categoryLabel(String(v)).toLowerCase();
+const dmy = (v: unknown) => String(v).split('-').reverse().join('/');
 const months = (v: unknown) => { const x = n(v); return `${String(x).replace('.', ',')} mois`; };
 
 export function findingText(r: Recommendation): string {
@@ -33,6 +35,11 @@ export function findingText(r: Recommendation): string {
     case 'budget_overrun_repeated': return `Le budget « ${categoryLabel(String(p.category))} » a été dépassé ${p.overMonths} mois sur ${p.of}.`;
     case 'unallocated_capacity': return `Votre capacité d’épargne estimée est de ${formatCents(n(p.capacityCents), { round: true })} par mois ; ${formatCents(n(p.freeCents), { round: true })} ne sont affectés à aucun projet.`;
     case 'spending_concentration': return `La catégorie « ${categoryLabel(String(p.category))} » représente ${formatPermille(n(p.sharePermille))} de vos dépenses courantes.`;
+    case 'goal_late': {
+      const when = p.overdue ? `La date souhaitée (${dmy(p.targetDate)}) est dépassée` : `La date souhaitée (${dmy(p.targetDate)}) ne sera pas tenue au rythme actuel`;
+      const est = p.projectedDate ? ` : atteinte estimée le ${dmy(p.projectedDate)}${n(p.delayMonths) > 0 ? `, soit ${n(p.delayMonths)} mois de retard` : ''}` : ' : aucune date estimable à ce rythme';
+      return `« ${p.goalName} » — ${when}${est}. Reste à mettre de côté : ${formatCents(n(p.remainingCents), { round: true })}.`;
+    }
     case 'subscriptions_review': return `${p.count} abonnement(s) actif(s) détecté(s), pour ${formatCents(n(p.totalCents))} par mois.`;
     default: return '';
   }
@@ -48,6 +55,12 @@ export function proposalText(r: Recommendation): string {
     case 'allocate_to_goals': return `Affecter ${formatCents(n(p.allocatedCents), { round: true })} par mois à ${p.goals} projet(s) qui en ont besoin.`;
     case 'create_goal': return `Donner une destination à ces ${formatCents(n(p.freeCents), { round: true })} : réserve, projet ou épargne de long terme.`;
     case 'test_reduction': return `Tester une réduction de ${formatPermille(n(p.cutPermille))} sur « ${categoryLabel(String(p.category))} », soit ${formatCents(n(p.cutCents), { round: true })} par mois.`;
+    case 'catch_up_goal': {
+      const options = [`augmenter l’effort de ${formatCents(n(p.extraMonthlyCents), { round: true })} par mois (${formatCents(n(p.newMonthlyCents), { round: true })} au total)${p.correctedDate ? `, pour une atteinte estimée le ${dmy(p.correctedDate)}` : ''}`];
+      if (p.laterDate) options.push(`garder l’effort actuel et repousser la date au ${dmy(p.laterDate)} (estimation)`);
+      options.push(`ajuster la cible à ${formatCents(n(p.reachableCents), { round: true })}, montant atteignable à la date souhaitée`);
+      return `Scénarios possibles : ${options.join(' ; ou ')}.`;
+    }
     case 'review_subscriptions': return 'Vérifier si chaque abonnement est encore utile.';
     default: return '';
   }
@@ -76,12 +89,17 @@ const DATA_LABEL: Record<string, string> = {
   category_median: 'Dépense mensuelle (médiane)',
   share_of_spending: 'Part des dépenses courantes',
   subscription: 'Abonnement',
+  goal_target: 'Montant cible du projet',
+  goal_saved: 'Déjà mis de côté',
+  goal_pace: 'Effort d’épargne actuel',
+  goal_required: 'Effort nécessaire pour la date souhaitée',
+  goal_months_left: 'Mois restants'
 };
 
 const SOURCE_LABEL = (s: string) => {
   const m = /^analysis_(\d+)_months$/.exec(s);
   if (m) return `vos opérations des ${m[1]} derniers mois complets`;
-  return ({ transactions: 'vos opérations', reserve_accounts: 'vos comptes de réserve', budget: 'vos budgets', goals: 'vos projets', recurring_detection: 'détection des opérations récurrentes' } as Record<string, string>)[s] ?? s;
+  return ({ transactions: 'vos opérations', reserve_accounts: 'vos comptes de réserve', budget: 'vos budgets', goals: 'vos projets', recurring_detection: 'détection des opérations récurrentes', goal: 'votre projet', goal_allocations: 'vos mises de côté', goal_declared_pace: 'votre capacité mensuelle déclarée', goal_observed_pace: 'vos mises de côté des 3 derniers mois' } as Record<string, string>)[s] ?? s;
 };
 
 export function dataLine(d: DataPoint): { label: string; value: string; source: string } {
@@ -106,6 +124,7 @@ export const ACTION_LABEL: Record<string, string> = {
   optimize_category: 'Simuler une réduction',
   reserve_goal: 'Planifier ma réserve',
   goals: 'Voir mes projets',
+  open_goal: 'Ouvrir le projet',
 };
 
 /** Mention réglementaire affichée avec les recommandations. */

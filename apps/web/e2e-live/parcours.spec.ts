@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
-  activateIslamicFinance, apiToken, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm, visibleButton,
+  activateIslamicFinance, apiToken, createGoalWithWizard, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm, visibleButton,
 } from './helpers';
 
 /**
@@ -94,21 +94,16 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
 
   test('6. objectif Hajj : consentement article 9, cible, épargne disponible, date, capacité, progression', async ({ page }) => {
     await signIn(page, A);
-    await page.goto('/goals');
+    await page.goto('/goals/nouveau');
     // Sprint 2 : l'objectif Hajj demande le consentement article 9, distinct de l'accès à l'application
-    await expect(page.getByTestId('form-hajj')).toHaveCount(0);
+    await expect(page.getByTestId('form-objectif').getByRole('radio', { name: /^Hajj/ })).toHaveCount(0);
     await activateIslamicFinance(page, '/goals');
-    const form = page.getByTestId('form-hajj');
-    await form.getByLabel('Montant cible (€)').fill('9 000');
-    await form.getByLabel('Épargne déjà disponible (€)').fill('1 500');
-    await form.getByLabel('Capacité d’épargne mensuelle (€)').fill('400');
-    await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-    await expect(form.getByRole('status')).toContainText('Objectif Hajj créé');
-    await page.reload();
+    await createGoalWithWizard(page, { category: 'Hajj', target: '9 000', available: '1 500', monthly: '400' });
+    await page.goto('/goals');
     const card = page.getByRole('article').filter({ hasText: 'Hajj' }).first();
     await expect(card).toContainText(euros('1 500,00 €'));
     await expect(card).toContainText(euros('9 000,00 €'));
-    await expect(card.getByTestId('progression')).toHaveText('17 %'); // 1 500 / 9 000
+    await expect(card.getByTestId('progression')).toContainText('17 %'); // 1 500 / 9 000
   });
 
   test('7. le dashboard est alimenté par les données enregistrées', async ({ page }) => {

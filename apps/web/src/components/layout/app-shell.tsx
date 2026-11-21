@@ -34,7 +34,7 @@ function SignOut({ className }: { className?: string }) {
   );
 }
 
-export function AppShell({ children, demo, displayName = null }: { children: ReactNode; demo: boolean; displayName?: string | null }) {
+export function AppShell({ children, demo, demoDate = null, displayName = null }: { children: ReactNode; demo: boolean; demoDate?: string | null; displayName?: string | null }) {
   const pathname = usePathname();
   const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const isActive = (href: string) => {
@@ -78,7 +78,12 @@ export function AppShell({ children, demo, displayName = null }: { children: Rea
 
       <div className="flex min-h-dvh flex-col">
         {demo ? (
-          <div role="status" className="bg-accent-100 px-4 py-2 text-center text-xs font-medium text-ink">{fr.app.demoBanner}</div>
+          <div role="status" className="bg-accent-100 px-4 py-2 text-center text-xs font-medium text-ink">
+            {fr.app.demoBanner}
+            {demoDate ? (
+              <> {' '}Date simulée : <Link href="/simulation" className="underline underline-offset-2" data-testid="date-demo">{demoDate.split('-').reverse().join('/')}</Link></>
+            ) : null}
+          </div>
         ) : null}
         <header className="flex items-center gap-2 border-b border-line bg-paper px-4 py-3 md:hidden">
           <LogoMark className="h-7 w-7 text-primary-900" />

@@ -10,8 +10,13 @@ export interface AccountRow { id: string; name: string; type: string; currency: 
 export interface TransactionRow { id: string; account_id: string; booked_on: string; amount_cents: number | string; currency: string; description: string; counterparty_name: string | null; category_slug: string | null; is_interest: boolean; counterparty_iban_last4?: string | null }
 export interface CategoryRow { slug: string; kind: 'income' | 'expense' | 'transfer'; is_essential: boolean; is_interest: boolean; household_id: string | null; label?: string | null; default_nature?: 'fixed' | 'variable' | null }
 export interface BudgetRow { category_slug: string; limit_cents: number | string; month: string }
-export interface GoalRow { id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string; monthly_capacity_cents?: number | string | null }
-export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string }
+export interface GoalRow {
+  id: string; kind: Goal['kind']; name: string; target_cents: number | string; target_date: string; status: string;
+  monthly_capacity_cents?: number | string | null; priority?: number | null; realized_on?: string | null;
+  plan_confirmed_on?: string | null; strategy_monthly_cents?: number | string | null; strategy_chosen_on?: string | null;
+  template_id?: string | null; occurrence_year?: number | null; previous_goal_id?: string | null;
+}
+export interface AllocationRow { goal_id: string; amount_cents: number | string; allocated_on: string; source?: 'initial' | 'manual' | null }
 export interface AssetRow { id: string; kind: ZakatAsset['kind']; name: string; value_cents: number | string; weight_mg: number | string | null; purity_permille: number | null; is_accessible: boolean; receivable_likely: boolean | null; account_id: string | null; details: Record<string, unknown> | null }
 export interface LiabilityRow { id: string; name: string; outstanding_cents: number | string; due_12m_cents: number | string }
 export interface PriceRow { symbol: 'XAU' | 'XAG'; price_per_g_cents: number | string; as_of: string; source?: string | null }
@@ -124,16 +129,34 @@ export function mapHouseholdRows(rows: HouseholdRows): HouseholdData {
     categories: [...cats.values()],
     budget: rows.budgets.filter((b) => b.month === month).map((b) => ({ categorySlug: b.category_slug, limitCents: toCents(b.limit_cents) })),
     budgetHistory: rows.budgets.map((b) => ({ month: b.month.slice(0, 7), categorySlug: b.category_slug, limitCents: toCents(b.limit_cents) })),
-    goals: rows.goals.filter((g) => g.status !== 'archived').map((g) => ({
-      id: g.id, kind: g.kind, name: g.name, targetCents: toCents(g.target_cents), targetDate: g.target_date,
-      monthlyCapacityCents: g.monthly_capacity_cents === null || g.monthly_capacity_cents === undefined ? undefined : toCents(g.monthly_capacity_cents),
-    })),
-    allocations: rows.allocations.map((a) => ({ goalId: a.goal_id, amountCents: toCents(a.amount_cents), allocatedOn: a.allocated_on })) as GoalAllocation[],
+    // Les projets archivés restent lus (consultation et historique) ; les moteurs les écartent de la planification
+    goals: rows.goals.map(mapGoalRow),
+    allocations: rows.allocations.map((a) => ({
+      goalId: a.goal_id, amountCents: toCents(a.amount_cents), allocatedOn: a.allocated_on, ...(a.source ? { source: a.source } : {}),
+    })) as GoalAllocation[],
     assets: [...accountAssets, ...manualAssets],
     liabilities: rows.liabilities.map((l): ZakatLiability => ({ id: l.id, label: l.name, outstandingCents: toCents(l.outstanding_cents), due12mCents: toCents(l.due_12m_cents) })),
     prices: { gold: selectMetalPrice(priceEntries, 'XAU', rows.asOf), silver: selectMetalPrice(priceEntries, 'XAG', rows.asOf) },
     priceEntries,
     zakat: { choices: zakatChoicesFrom(rows.zakatSettings) },
     emergencyFundMonths: 3,
+  };
+}
+
+/** Projet de la base vers le modèle commun (décisions du parcours comprises). */
+export function mapGoalRow(g: GoalRow): Goal {
+  const strategy = g.strategy_monthly_cents !== null && g.strategy_monthly_cents !== undefined && g.strategy_chosen_on
+    ? { strategy: { monthlyCents: toCents(g.strategy_monthly_cents), chosenOn: g.strategy_chosen_on } } : {};
+  return {
+    id: g.id, kind: g.kind, name: g.name, targetCents: toCents(g.target_cents), targetDate: g.target_date,
+    monthlyCapacityCents: g.monthly_capacity_cents === null || g.monthly_capacity_cents === undefined ? undefined : toCents(g.monthly_capacity_cents),
+    lifecycle: (['active', 'paused', 'achieved', 'archived'] as const).find((x) => x === g.status) ?? 'active',
+    ...(g.realized_on ? { realizedOn: g.realized_on } : {}),
+    ...(g.priority ? { priority: g.priority } : {}),
+    ...(g.plan_confirmed_on ? { planConfirmedOn: g.plan_confirmed_on } : {}),
+    ...strategy,
+    ...(g.template_id ? { templateId: g.template_id } : {}),
+    ...(g.occurrence_year ? { occurrence: g.occurrence_year } : {}),
+    ...(g.previous_goal_id ? { previousGoalId: g.previous_goal_id } : {}),
   };
 }

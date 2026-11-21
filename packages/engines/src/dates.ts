@@ -47,3 +47,10 @@ export function addMonths(date: IsoDate, n: number): IsoDate {
   const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   return new Date(Date.UTC(y, m, Math.min(d, last))).toISOString().slice(0, 10);
 }
+
+/** Date décalée de n jours (calendrier UTC, sans heure). */
+export function addDays(date: IsoDate, n: number): IsoDate {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
