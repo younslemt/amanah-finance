@@ -100,3 +100,11 @@ Détails complets : `docs/DEMO-INTERACTIVE.md`.
   - simulateur multi-scénarios tenant compte des autres projets ;
   - point d’intégration « Explorer les solutions », sans aucun partenaire.
 - **Correction annexe** : le test e2e Sprint 3 dépendait du jour d’exécution. L’abonnement fictif du 6 du mois devenait « inactif » après le 21. Il ne dépend plus de la date.
+
+## Revue finale du Sprint 5
+
+1. **Confidentialité du calendrier** (migration `0024`) : événements personnels (par défaut), familiaux partagés volontairement, religieux personnalisés (classification explicite, toujours privés, consentement requis, supprimés au retrait du consentement avec effacement). RLS revue et isolation testée entre membres d'un même foyer (`calendar_privacy.test.sql`). Correction trouvée : la règle de mise à jour empêchait un membre de modifier un événement familial partagé ; un trigger garantit désormais que l'auteur et le foyer ne changent jamais.
+2. **Calendriers scolaires** : approximations conservées comme indicatives ; registre de calendriers officiels versionnés par année scolaire et communauté (vide tant qu'aucune source officielle n'est vérifiée) ; dates corrigées par la personne jamais écrasées par un recalcul.
+3. **Date de référence de la démonstration** : `DEMO_AS_OF` par défaut (tests déterministes) ; page `/simulation` avec quatre moments de l'année et une date libre ; toutes les échéances recalculées ; données fictives uniquement.
+
+Détails : `docs/SUGGESTIONS-CALENDRIER.md` (section 8) et `docs/DEMO-INTERACTIVE.md`.

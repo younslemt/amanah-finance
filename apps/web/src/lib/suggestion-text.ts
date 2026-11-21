@@ -27,6 +27,6 @@ export function suggestionExplanation(s: Suggestion): string {
 export const FREQUENCY_LABEL = (t: GoalTemplate) => (t.recurrence === 'yearly' ? 'Chaque année (chaque occurrence reste un projet distinct)' : 'Ponctuel');
 
 export const EVENT_SOURCE_LABEL: Record<CalendarEvent['source'], string> = {
-  school_calendar: 'calendrier scolaire choisi (indicatif)', tabular_estimate: 'estimation par calcul (non officielle)',
-  confirmed_by_user: 'confirmée par vous', user: 'saisie par vous', goal: 'échéance d’un projet', detected: 'dépense annuelle détectée',
+  school_calendar: 'approximation du calendrier scolaire choisi (indicative)', official_calendar: 'calendrier scolaire officiel', tabular_estimate: 'estimation par calcul (non officielle)',
+  confirmed_by_user: 'confirmée ou corrigée par vous', user: 'saisie par vous', goal: 'échéance d’un projet', detected: 'dépense annuelle détectée',
 };

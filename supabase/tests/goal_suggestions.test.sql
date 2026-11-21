@@ -67,7 +67,7 @@ select pg_temp.expect('identifiant de suggestion invalide refusé', format($q$
 select pg_temp.expect('décision au nom d''une autre personne refusée', format($q$
   insert into public.suggestion_decisions (user_id, household_id, suggestion_id, status) values ('00000000-0000-0000-0000-0000000000a2', %L, 'mariage', 'dismissed')$q$, current_setting('t.hh')), false);
 select pg_temp.expect('événement familial du foyer', format($q$
-  insert into public.calendar_events (household_id, label, event_date, yearly) values (%L, 'Assurance habitation', date '2027-03-15', true)$q$, current_setting('t.hh')), true);
+  insert into public.calendar_events (household_id, label, event_date, yearly, visibility) values (%L, 'Assurance habitation', date '2027-03-15', true, 'household')$q$, current_setting('t.hh')), true);
 
 -- Idris (même foyer, sans consentement)
 set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a2';

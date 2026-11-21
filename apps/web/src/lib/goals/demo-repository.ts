@@ -1,12 +1,11 @@
 import 'server-only';
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
-import { DEMO_AS_OF } from '@amanah/banking';
 import { MAX_CHUNKS, decodeDemoState, encodeDemoState, toChunks } from './demo-codec.ts';
 import {
   demoHistory, initialDemoState, opAddAllocation, opChooseStrategy, opCreateEid, opCreateGoal, opSavePlan, opSetDeclaredCapacity,
   opSetLifecycle, opUpdateEidBudget, opUpdateEidDate, opUpdateGoal, toEngineGoal, type DemoState, type OpResult,
-  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences,
+  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences, opSetSimulationDate,
 } from './demo-state.ts';
 import { fail, ok, type GoalRepository, type RepoResult } from './repository.ts';
 
@@ -55,8 +54,12 @@ async function apply<T>(op: (s: DemoState) => OpResult<T>): Promise<RepoResult<T
   return w.ok ? ok(r.value) : w;
 }
 
-export function demoGoalRepository(): GoalRepository {
-  const today = () => DEMO_AS_OF;
+/** Choisir la date de référence simulée de la démonstration (null : date de départ). */
+export const setDemoSimulationDate = (d: string | null) => apply((s) => opSetSimulationDate(s, d));
+
+/** asOf : date de référence de la démonstration (demoAsOf de l'état courant). */
+export function demoGoalRepository(asOf: string): GoalRepository {
+  const today = () => asOf;
   return {
     mode: 'demo',
     religiousEnabled: true,
@@ -77,7 +80,7 @@ export function demoGoalRepository(): GoalRepository {
     updateEidBudget: (goalId, b) => apply((s) => opUpdateEidBudget(s, goalId, b, today())),
     planning: async () => {
       const p = (await readDemoState()).state.planning;
-      return { prefs: p.prefs, decisions: p.decisions, events: p.events };
+      return { prefs: p.prefs, decisions: p.decisions, events: p.events.map((e) => ({ ...e, mine: true })) };
     },
     savePlanningPreferences: (prefs) => apply((s) => opSavePlanningPreferences(s, prefs)),
     decideSuggestion: (id, decision) => apply((s) => opDecideSuggestion(s, id, decision, today())),

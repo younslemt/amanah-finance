@@ -182,3 +182,16 @@ scripts\windows\lancer-demo.cmd
 ```
 
 L’état de démonstration est propre à chaque navigateur. Pour repartir des données fictives de départ, utilisez Projets → « Réinitialiser la démonstration ».
+
+## Date de référence simulée (revue finale du Sprint 5)
+
+- Par défaut, la démonstration est datée du `DEMO_AS_OF` (9 novembre 2026) : les tests restent déterministes.
+- Page `/simulation` (démonstration uniquement, 404 en mode réel), accessible depuis le bandeau « Date simulée » :
+  - **Janvier 2027** : préparer le Ramadan et l'Aïd al-Fitr ;
+  - **Avril 2027** : vacances de printemps et Aïd al-Adha ;
+  - **Juillet 2027** : vacances d'été et rentrée ;
+  - **Octobre 2027** : révision du budget et projets de l'année suivante ;
+  - date libre (de `DEMO_AS_OF` à +24 mois) et retour à la date de départ.
+- La date choisie est stockée dans l'état de démonstration (`planning.simulationDate`, cookie). Le dépôt (`today()`) et le foyer fictif (`asOf`) l'utilisent : **toutes les échéances** (calendrier, suggestions, plan d'épargne, budget du mois, Zakat) sont recalculées.
+- Les données bancaires **fictives** sont décalées d'un nombre entier de mois (opérations, plafonds, prix, début du hawl) pour rester récentes ; aucune donnée réelle. Les projets ne bougent pas ; une opération ou une affectation postérieure à la date simulée est ignorée.
+- Format : états antérieurs relus sans perte (visibilité « personnel », aucune correction scolaire, date de départ).

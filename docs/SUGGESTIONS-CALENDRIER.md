@@ -159,3 +159,28 @@ Un projet « Ramadan » ou « Aïd al-Fitr » révèle une pratique religieuse. 
   - décision conservée ;
   - calendrier ;
   - religieux après activation volontaire.
+
+## 8. Revue finale du Sprint 5 — confidentialité et calendriers scolaires
+
+### 8.1 Confidentialité du calendrier (migration `0024`)
+
+Trois sortes d'événements ajoutés, choisies **explicitement** dans le formulaire :
+
+| Sorte | Colonnes | Qui le voit | Qui le modifie |
+|---|---|---|---|
+| Personnel (par défaut) | `visibility = 'private'` | son auteur seulement | son auteur |
+| Familial partagé volontairement | `visibility = 'household'` | tout le foyer | membres avec droit d'écriture (sans pouvoir le rendre privé ni se l'approprier) |
+| Religieux personnalisé | `religious = true` (toujours `private`) | son auteur, **avec consentement article 9** | son auteur, avec consentement |
+
+- Le caractère religieux n'est **jamais déduit du libellé** : seule la case « Événement religieux » le classe (affichée seulement avec le consentement). Un libellé comme « Fête de l'Aïd chez les cousins » sans la case reste un événement ordinaire (testé).
+- Base : contraintes `calendar_events_religious_private` et `calendar_events_private_owner`, fonctions `calendar_event_readable` / `calendar_event_writable` (réutilisent `religious_readable` / `religious_writable`), trigger `calendar_events_keep_author` (auteur et foyer non modifiables), `created_by = auth.uid()` exigé à l'insertion.
+- Retrait du consentement avec effacement : `erase_my_religious_data()` supprime les événements religieux créés par la personne (`calendar_events` dans le résultat) et conserve les autres.
+- Événements existants avant la migration : restent partagés avec le foyer (comportement antérieur) ; nouveaux événements : personnels par défaut.
+- Tests d'isolation dans un même foyer : `supabase/tests/calendar_privacy.test.sql` (21 contrôles — Hana avec consentement, Idris même foyer sans consentement, Jad autre foyer).
+
+### 8.2 Calendriers scolaires officiels
+
+- Les dates calculées restent des **approximations indicatives** (`schoolDates`).
+- Architecture prête pour les calendriers officiels : `OFFICIAL_SCHOOL_CALENDARS` (autorité `fwb` / `vl`, année scolaire `2026-2027`, version, source, date de publication, rentrée, début des vacances d'été). **Le registre est vide** : aucune date officielle n'est inventée ; il se remplit après vérification dans la source officielle de la communauté compétente.
+- Résolution (`resolveSchoolDates`) : date corrigée par la personne > calendrier officiel (version la plus récente de l'année scolaire) > calendrier personnalisé > approximation.
+- Corrections : `prefs.schoolOverrides` (`planning_preferences.school_overrides`, 20 au plus), formulaire « Corriger la date » dans le calendrier, avec source obligatoire. **Une date confirmée n'est jamais écrasée** : ni par un changement de calendrier, ni par l'enregistrement des préférences, ni par un calendrier officiel (testé dans le moteur et en e2e). « Retirer ma correction » revient à la règle de résolution.

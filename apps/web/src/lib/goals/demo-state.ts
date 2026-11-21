@@ -12,7 +12,7 @@
  */
 import { z } from 'zod';
 import { DEMO_ALLOCATIONS, DEMO_AS_OF, DEMO_GOALS } from '@amanah/banking';
-import { DEFAULT_PLANNING_PREFERENCES, addDays, eidBudget, templateById, type Goal, type GoalAllocation, type GoalKind, type PlanningPreferences, SNOOZE_DAYS } from '@amanah/engines';
+import { DEFAULT_PLANNING_PREFERENCES, addDays, addMonths, eidBudget, templateById, type Goal, type GoalAllocation, type GoalKind, type PlanningPreferences, SNOOZE_DAYS } from '@amanah/engines';
 import { DEMO_AID_ALLOCATIONS, DEMO_AID_GOAL, DEMO_AID_PLAN } from '../demo-eid.ts';
 import type { EidBudgetFields, GoalChangeRow, GoalPatch, LifecycleAction, NewEidInput, NewGoalInput, PlanLineInput } from './repository.ts';
 
@@ -53,9 +53,17 @@ const planningSchema = z.object({
     schoolCalendar: z.enum(['be-fwb', 'be-vl', 'custom']),
     customSchool: z.object({ start: monthDay, holidays: monthDay }).nullable(),
     confirmations: z.array(z.object({ type: z.enum(['ramadan', 'eid_al_fitr']), year: z.number().int().min(2000).max(2100), date, source: z.string().min(3).max(200) })).max(20),
+    // Dates scolaires corrigées par la personne (absentes des états antérieurs)
+    schoolOverrides: z.array(z.object({ kind: z.enum(['start', 'holidays']), year: z.number().int().min(2000).max(2100), date, source: z.string().min(3).max(200) })).max(20).default([]),
   }),
   decisions: z.array(z.object({ id: z.string().regex(/^[a-z0-9-]{2,40}(:[0-9]{4})?$/), status: z.enum(['snoozed', 'dismissed']), until: date.optional() })).max(DEMO_LIMITS.decisions),
-  events: z.array(z.object({ id, label: z.string().min(2).max(80), date, yearly: z.boolean() })).max(DEMO_LIMITS.events),
+  // Visibilité et classification explicites (états antérieurs : événement personnel, non religieux)
+  events: z.array(z.object({
+    id, label: z.string().min(2).max(80), date, yearly: z.boolean(),
+    visibility: z.enum(['private', 'household']).default('private'), religious: z.boolean().default(false),
+  }).refine((e) => !e.religious || e.visibility === 'private')).max(DEMO_LIMITS.events),
+  /** Date de référence simulée (null : DEMO_AS_OF, tests déterministes). */
+  simulationDate: date.nullable().default(null),
 });
 
 const allocationSchema = z.object({
@@ -120,7 +128,8 @@ export function initialPlanning(): DemoState['planning'] {
   return {
     prefs: { ...DEFAULT_PLANNING_PREFERENCES, hasChildren: true, hasVehicle: true, interests: ['entretien-automobile'] },
     decisions: [],
-    events: [{ id: 'evt-assurance', label: 'Assurance habitation (fictive)', date: '2027-03-15', yearly: true }],
+    events: [{ id: 'evt-assurance', label: 'Assurance habitation (fictive)', date: '2027-03-15', yearly: true, visibility: 'household', religious: false }],
+    simulationDate: null,
   };
 }
 
@@ -381,13 +390,35 @@ export function opDecideSuggestion(s: DemoState, suggestionId: string, decision:
   return done({ ...s, planning: { ...s.planning, decisions } }, undefined);
 }
 
-export function opAddCalendarEvent(s: DemoState, e: { label: string; date: string; yearly: boolean }): OpResult {
+export function opAddCalendarEvent(
+  s: DemoState,
+  e: { label: string; date: string; yearly: boolean; visibility?: 'private' | 'household'; religious?: boolean },
+): OpResult {
   if (s.planning.events.length >= DEMO_LIMITS.events) return err(`Démonstration limitée à ${DEMO_LIMITS.events} échéances personnalisées.`);
-  const event = { id: `evt-${s.seq + 1}`, label: e.label, date: e.date, yearly: e.yearly };
+  // Un événement religieux reste toujours privé (même règle que la base réelle)
+  const religious = e.religious === true;
+  const event = { id: `evt-${s.seq + 1}`, label: e.label, date: e.date, yearly: e.yearly, visibility: religious ? 'private' as const : e.visibility ?? 'private', religious };
   return done({ ...s, seq: s.seq + 1, planning: { ...s.planning, events: [...s.planning.events, event] } }, undefined);
 }
 
 export function opRemoveCalendarEvent(s: DemoState, eventId: string): OpResult {
   if (!s.planning.events.some((e) => e.id === eventId)) return err('Échéance introuvable.');
   return done({ ...s, planning: { ...s.planning, events: s.planning.events.filter((e) => e.id !== eventId) } }, undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Date de référence de la démonstration
+// ---------------------------------------------------------------------------
+/** Horizon de simulation : de DEMO_AS_OF à 24 mois plus tard. */
+export const SIMULATION_MAX = addMonths(DEMO_AS_OF, 24);
+
+/** Date du jour de la démonstration : la date simulée choisie, sinon DEMO_AS_OF. */
+export const demoAsOf = (s: DemoState): string => s.planning.simulationDate ?? DEMO_AS_OF;
+
+/** Choisir une date de référence (null : revenir à DEMO_AS_OF). Les projets ne sont pas modifiés. */
+export function opSetSimulationDate(s: DemoState, d: string | null): OpResult {
+  if (d !== null && (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < DEMO_AS_OF || d > SIMULATION_MAX)) {
+    return err(`Choisissez une date entre le ${DEMO_AS_OF} et le ${SIMULATION_MAX}.`);
+  }
+  return done({ ...s, planning: { ...s.planning, simulationDate: d === DEMO_AS_OF ? null : d } }, undefined);
 }

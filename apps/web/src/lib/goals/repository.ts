@@ -39,7 +39,8 @@ export interface NewGoalInput {
 }
 
 /** Préférences, décisions sur les suggestions et événements du calendrier familial. */
-export interface PlanningData { prefs: PlanningPreferences; decisions: SuggestionDecision[]; events: CustomCalendarEvent[] }
+/** mine : événement créé par la personne connectée (les autres sont des événements familiaux partagés). */
+export interface PlanningData { prefs: PlanningPreferences; decisions: SuggestionDecision[]; events: Array<CustomCalendarEvent & { mine: boolean }> }
 
 export interface GoalPatch {
   name: string;

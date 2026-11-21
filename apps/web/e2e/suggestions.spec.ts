@@ -170,3 +170,73 @@ test('projet annuel : reconduction décidée, budget de référence modifiable, 
   await expect(page.getByTestId('deja-reconduit')).toBeVisible();
   await expect(page.getByTestId('historique-affectations')).toContainText(euros('300,00 €'));
 });
+
+test('calendrier : visibilité explicite, classification religieuse, correction d’une date scolaire jamais recalculée', async ({ page }) => {
+  await page.goto('/goals/calendrier');
+  const add = page.getByTestId('form-evenement');
+  await add.getByLabel('Libellé').fill('Fête de l’Aïd chez les cousins');
+  await add.getByLabel('Date').fill('2027-03-20');
+  await add.getByRole('button', { name: 'Ajouter au calendrier' }).click();
+  // Libellé à connotation religieuse, sans classification : événement personnel ordinaire
+  const plain = page.locator('[data-testid="evenement"]', { hasText: 'Fête de l’Aïd chez les cousins' }).getByTestId('visibilite-evenement');
+  await expect(plain).toHaveAttribute('data-visibility', 'private');
+  await expect(plain).toHaveAttribute('data-religious', 'no');
+  await add.getByLabel('Libellé').fill('Veillée fictive');
+  await add.getByLabel('Date').fill('2027-03-21');
+  await add.getByLabel('Tout mon foyer (partage volontaire)').check();
+  await add.getByLabel(/Événement religieux/).check();
+  await add.getByRole('button', { name: 'Ajouter au calendrier' }).click();
+  const vigil = page.locator('[data-testid="evenement"]', { hasText: 'Veillée fictive' }).getByTestId('visibilite-evenement');
+  await expect(vigil).toHaveAttribute('data-religious', 'yes');
+  await expect(vigil).toHaveAttribute('data-visibility', 'private');
+
+  // Correction de la rentrée : conservée, plus indicative, et jamais écrasée par un changement de calendrier
+  const start = () => page.locator('[data-testid="evenement"][data-type="school_start"]').first();
+  await expect(start()).toContainText('indicative');
+  await start().getByText('Corriger la date').click();
+  const fix = start().getByTestId('corriger-date-scolaire');
+  await fix.getByLabel('Date exacte').fill('2027-09-02');
+  await fix.getByLabel('Source').fill('Courrier fictif de l’école');
+  await fix.getByRole('button', { name: 'Enregistrer la date' }).click();
+  await expect(start()).toContainText('2 septembre 2027');
+  await expect(start()).not.toContainText('indicative');
+  await expect(start()).toContainText('Courrier fictif de l’école');
+  await page.goto('/goals/preferences');
+  const prefs = page.getByTestId('form-preferences');
+  await prefs.getByLabel('Calendrier scolaire').selectOption('be-vl');
+  await prefs.getByRole('button', { name: 'Enregistrer mes préférences' }).click();
+  await expect(prefs.getByRole('status')).toContainText('recalculés');
+  await page.goto('/goals/calendrier');
+  await expect(start()).toContainText('2 septembre 2027');
+  // Retirer la correction : retour à l'approximation indicative (Flandre)
+  await start().getByText('Modifier la correction').click();
+  await start().getByTestId('retirer-correction-scolaire').getByRole('button').click();
+  await expect(start()).toContainText('1 septembre 2027');
+  await expect(start()).toContainText('indicative');
+});
+
+test('date de référence simulée : janvier (Ramadan), juillet (rentrée), retour à la date de départ', async ({ page }) => {
+  await page.goto('/simulation');
+  await expect(page.getByTestId('date-simulee')).toHaveAttribute('data-date', '2026-11-09');
+  await page.getByTestId('simulation-2027-01-15').getByRole('button').click();
+  await expect(page.getByTestId('date-simulee')).toHaveAttribute('data-date', '2027-01-15');
+  await expect(page.getByTestId('date-demo')).toHaveText('15/01/2027');
+  await page.goto('/goals');
+  await expect(suggestion(page, 'ramadan:2027')).toBeVisible();
+  await page.goto('/goals/calendrier');
+  await expect(page.locator('[data-testid="evenement"]').first()).not.toContainText('2026');
+
+  await page.goto('/simulation');
+  await page.getByTestId('simulation-2027-07-15').getByRole('button').click();
+  await expect(page.getByTestId('date-simulee')).toHaveAttribute('data-date', '2027-07-15');
+  await page.goto('/goals');
+  await expect(suggestion(page, 'rentree-scolaire:2027')).toBeVisible();
+  await expect(suggestion(page, 'ramadan:2027')).toHaveCount(0);
+  // Le budget suit la date simulée (mois courant fictif)
+  await page.goto('/dashboard');
+  await expect(page.getByText(/juillet 2027/i).first()).toBeVisible();
+
+  await page.goto('/simulation');
+  await page.getByTestId('simulation-reinitialiser').getByRole('button').click();
+  await expect(page.getByTestId('date-simulee')).toHaveAttribute('data-date', '2026-11-09');
+});

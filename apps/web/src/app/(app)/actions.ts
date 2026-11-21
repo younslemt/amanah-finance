@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { writeGoalRepository, type GoalRepository } from '@/lib/goals';
-import { resetDemoState } from '@/lib/goals/demo-repository';
+import { resetDemoState, setDemoSimulationDate } from '@/lib/goals/demo-repository';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession, type SessionContext } from '@/lib/supabase/session';
 import { formError, formOk, type FormState } from '@/lib/form-state';
@@ -11,6 +11,7 @@ import {
   accountSchema, allocationSchema, budgetSchema, categorySchema, customCategorySlug, fieldErrorsOf,
   declaredCapacitySchema, formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, savingsPlanSchema, strategySchema, transactionSchema,
   calendarEventIdSchema, calendarEventSchema, planningPreferencesSchema, religiousDateConfirmationSchema, suggestionDecisionSchema,
+  schoolDateOverrideSchema, schoolDateResetSchema, simulationDateSchema,
 } from '@/lib/validation';
 
 /**
@@ -218,6 +219,16 @@ export async function resetDemo(_p: FormState, _fd: FormData): Promise<FormState
   return done('Démonstration réinitialisée : les données fictives de départ sont rétablies.');
 }
 
+/** Démonstration : simuler une autre date du jour ; toutes les échéances sont recalculées. */
+export async function setSimulationDate(_p: FormState, fd: FormData): Promise<FormState> {
+  if (!isDemoMode) return formError('Simulation de date réservée au mode démonstration.');
+  const parsed = simulationDateSchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Date invalide.', fieldErrorsOf(parsed.error));
+  const r = await setDemoSimulationDate(parsed.data.date);
+  if (!r.ok) return fromRepo(r);
+  return done(parsed.data.date ? `Démonstration simulée au ${parsed.data.date} : échéances, suggestions et budget recalculés.` : 'Date de départ de la démonstration rétablie.');
+}
+
 // --- Sprint 3 : choix du foyer pour l'analyse ------------------------------------
 /** « Ce n'est pas une dépense récurrente » : la série n'est plus détectée pour ce foyer. */
 export async function markNotRecurring(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -291,6 +302,8 @@ export async function savePlanningPreferences(_p: FormState, fd: FormData): Prom
     hasChildren: d.hasChildren, hasVehicle: d.hasVehicle, schoolCalendar: d.schoolCalendar,
     customSchool: d.schoolCalendar === 'custom' && d.schoolStart && d.schoolHolidays ? { start: d.schoolStart, holidays: d.schoolHolidays } : null,
     confirmations: repo.religiousEnabled ? current.confirmations : [],
+    // Les dates scolaires corrigées par la personne sont conservées : jamais écrasées
+    schoolOverrides: current.schoolOverrides ?? [],
   });
   if (!r.ok) return fromRepo(r);
   return done('Préférences enregistrées : les suggestions et le calendrier sont recalculés.');
@@ -312,9 +325,35 @@ export async function addCalendarEvent(_p: FormState, fd: FormData): Promise<For
   const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = calendarEventSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez l’échéance.', fieldErrorsOf(parsed.error));
+  if (parsed.data.religious && !repo.religiousEnabled) return formError('Activez d’abord les fonctions de finance islamique (consentement explicite).');
   const r = await repo.addCalendarEvent(parsed.data);
   if (!r.ok) return fromRepo(r);
-  return done('Échéance ajoutée au calendrier. Une date n’engage aucune dépense.');
+  return done(parsed.data.religious ? 'Événement religieux ajouté : visible par vous seul.'
+    : parsed.data.visibility === 'household' ? 'Échéance partagée avec votre foyer. Une date n’engage aucune dépense.'
+      : 'Échéance personnelle ajoutée : visible par vous seul. Une date n’engage aucune dépense.');
+}
+
+/** Date scolaire corrigée ou confirmée : elle prime sur le calendrier officiel et sur l'approximation. */
+export async function correctSchoolDate(_p: FormState, fd: FormData): Promise<FormState> {
+  const repo = await goals(); if (isRepoError(repo)) return repo;
+  const parsed = schoolDateOverrideSchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Vérifiez la date et sa source.', fieldErrorsOf(parsed.error));
+  const d = parsed.data;
+  const prefs = (await repo.planning()).prefs;
+  const others = (prefs.schoolOverrides ?? []).filter((o) => !(o.kind === d.kind && o.year === d.year));
+  const r = await repo.savePlanningPreferences({ ...prefs, schoolOverrides: [...others, { kind: d.kind, year: d.year, date: d.date, source: d.source }].slice(-20) });
+  if (!r.ok) return fromRepo(r);
+  return done('Date corrigée : elle ne sera plus recalculée automatiquement.');
+}
+
+export async function resetSchoolDate(_p: FormState, fd: FormData): Promise<FormState> {
+  const repo = await goals(); if (isRepoError(repo)) return repo;
+  const parsed = schoolDateResetSchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Date invalide.');
+  const prefs = (await repo.planning()).prefs;
+  const r = await repo.savePlanningPreferences({ ...prefs, schoolOverrides: (prefs.schoolOverrides ?? []).filter((o) => !(o.kind === parsed.data.kind && o.year === parsed.data.year)) });
+  if (!r.ok) return fromRepo(r);
+  return done('Correction retirée : la date suit à nouveau le calendrier choisi (indicatif).');
 }
 
 export async function removeCalendarEvent(_p: FormState, fd: FormData): Promise<FormState> {

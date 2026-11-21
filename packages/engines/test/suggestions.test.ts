@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  annualRenewalCheck, DEFAULT_PLANNING_PREFERENCES, estimateHijriEvent, familyCalendar, GOAL_TEMPLATES, schoolDates,
+  annualRenewalCheck, DEFAULT_PLANNING_PREFERENCES, estimateHijriEvent, familyCalendar, GOAL_TEMPLATES, OFFICIAL_SCHOOL_CALENDARS, resolveSchoolDates, schoolDates,
+  type OfficialSchoolCalendar,
   suggestGoals, templateById, templateDueDate, type CalendarInput, type PlanningPreferences, type SuggestionInput,
 } from '../src/index.ts';
 
@@ -33,6 +34,49 @@ describe('calendrier financier familial', () => {
     expect(schoolDates(2027, prefs())).toEqual({ start: '2027-08-30', holidays: '2027-07-03' }); // FWB : dernier lundi d'août
     expect(schoolDates(2027, prefs({ schoolCalendar: 'be-vl' }))).toEqual({ start: '2027-09-01', holidays: '2027-07-01' });
     expect(schoolDates(2027, prefs({ schoolCalendar: 'custom', customSchool: { start: '09-06', holidays: '06-30' } }))).toEqual({ start: '2027-09-06', holidays: '2027-06-30' });
+  });
+
+  it('calendriers scolaires : correction de la personne > calendrier officiel versionné > approximation', () => {
+    // Aucun calendrier officiel inventé : le registre est vide, les dates restent indicatives
+    expect(OFFICIAL_SCHOOL_CALENDARS.length).toBe(0);
+    expect(resolveSchoolDates(2027, prefs()).start).toEqual({ date: '2027-08-30', source: 'school_calendar', indicative: true });
+    const official: OfficialSchoolCalendar[] = [
+      { authority: 'fwb', schoolYear: '2027-2028', version: '1', source: 'Jeu de test fictif', publishedOn: '2026-01-10', start: '2027-08-31', summerHolidays: '2028-07-08' },
+      { authority: 'fwb', schoolYear: '2027-2028', version: '2', source: 'Jeu de test fictif', publishedOn: '2026-06-10', start: '2027-08-30', summerHolidays: '2028-07-07' },
+      { authority: 'fwb', schoolYear: '2026-2027', version: '1', source: 'Jeu de test fictif', publishedOn: '2025-06-10', start: '2026-08-31', summerHolidays: '2027-07-02' },
+      { authority: 'vl', schoolYear: '2027-2028', version: '1', source: 'Jeu de test fictif', publishedOn: '2026-06-10', start: '2027-09-01', summerHolidays: '2028-07-01' },
+    ];
+    // Communauté et année scolaire respectées, version la plus récente retenue
+    const r = resolveSchoolDates(2027, prefs(), official);
+    expect(r.start).toMatchObject({ date: '2027-08-30', source: 'official_calendar', indicative: false, detail: 'Jeu de test fictif (version 2)' });
+    expect(r.holidays).toMatchObject({ date: '2027-07-02', source: 'official_calendar' }); // vacances qui clôturent 2026-2027
+    // Une date confirmée par la personne n'est jamais écrasée par le calendrier officiel ni par le recalcul
+    const confirmed = prefs({ schoolOverrides: [{ kind: 'start', year: 2027, date: '2027-09-02', source: 'Courrier de l’école' }] });
+    expect(resolveSchoolDates(2027, confirmed, official).start).toEqual({ date: '2027-09-02', source: 'confirmed_by_user', indicative: false, detail: 'Courrier de l’école' });
+    expect(resolveSchoolDates(2027, { ...confirmed, schoolCalendar: 'be-vl' }, official).start.date).toBe('2027-09-02');
+    expect(resolveSchoolDates(2028, confirmed, official).start.source).toBe('school_calendar');
+    // Le calendrier familial reflète la résolution
+    const c = cal({ prefs: confirmed, officialSchoolCalendars: official });
+    expect(c.find((e) => e.id === 'school_start:2027')).toMatchObject({ date: '2027-09-02', indicative: false, source: 'confirmed_by_user' });
+    expect(c.find((e) => e.id === 'summer_holidays:2027')).toMatchObject({ date: '2027-07-02', indicative: false, source: 'official_calendar' });
+  });
+
+  it('événements ajoutés : personnels par défaut, partagés volontairement, religieux privés et masqués sans consentement', () => {
+    const customEvents = [
+      { id: 'p', label: 'Rendez-vous', date: '2027-01-10', yearly: false },
+      { id: 'f', label: 'Anniversaire', date: '2027-02-10', yearly: false, visibility: 'household' as const },
+      { id: 'r', label: 'Veillée', date: '2027-03-10', yearly: false, visibility: 'household' as const, religious: true },
+      // Un libellé à connotation religieuse sans classification explicite reste un événement ordinaire
+      { id: 'l', label: 'Fête de l’Aïd chez les cousins', date: '2027-04-10', yearly: false },
+    ];
+    const c = cal({ customEvents });
+    expect(c.find((e) => e.id === 'custom:p')).toMatchObject({ visibility: 'private', religious: false });
+    expect(c.find((e) => e.id === 'custom:f')).toMatchObject({ visibility: 'household', religious: false });
+    expect(c.find((e) => e.id === 'custom:r')).toMatchObject({ visibility: 'private', religious: true });
+    expect(c.find((e) => e.id === 'custom:l')).toMatchObject({ religious: false });
+    const off = cal({ customEvents, religiousEnabled: false });
+    expect(off.some((e) => e.id === 'custom:r')).toBe(false);
+    expect(off.some((e) => e.id === 'custom:l')).toBe(true);
   });
 
   it('dates religieuses indicatives, confirmables, et absentes sans activation', () => {

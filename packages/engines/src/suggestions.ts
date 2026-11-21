@@ -96,17 +96,97 @@ export interface PlanningPreferences {
   customSchool: { start: string; holidays: string } | null;
   /** Dates religieuses confirmées par la personne (avec leur source). */
   confirmations: Array<{ type: 'ramadan' | 'eid_al_fitr'; year: number; date: IsoDate; source: string }>;
+  /**
+   * Dates scolaires corrigées ou confirmées par la personne (école, document reçu…).
+   * Elles priment toujours : aucun recalcul automatique ne les écrase.
+   */
+  schoolOverrides: SchoolOverride[];
 }
+
+export interface SchoolOverride { kind: 'start' | 'holidays'; year: number; date: IsoDate; source: string }
 
 export const DEFAULT_PLANNING_PREFERENCES: PlanningPreferences = {
   groups: ['religious', 'family', 'finance', 'wealth'], hasChildren: null, hasVehicle: null, interests: [],
-  schoolCalendar: 'be-fwb', customSchool: null, confirmations: [],
+  schoolCalendar: 'be-fwb', customSchool: null, confirmations: [], schoolOverrides: [],
 };
 
 // ---------------------------------------------------------------------------
 // Calendrier financier familial
 // ---------------------------------------------------------------------------
-export interface CustomCalendarEvent { id: string; label: string; date: IsoDate; yearly: boolean }
+/**
+ * Événement ajouté par une personne du foyer.
+ * - visibility « private » (par défaut) : visible par son auteur uniquement ;
+ * - visibility « household » : partagé volontairement avec le foyer ;
+ * - religious : classification EXPLICITE choisie par la personne (jamais déduite du libellé),
+ *   toujours privé et masqué sans consentement aux fonctions religieuses.
+ */
+export interface CustomCalendarEvent {
+  id: string; label: string; date: IsoDate; yearly: boolean;
+  visibility?: 'private' | 'household';
+  religious?: boolean;
+}
+
+/**
+ * Calendrier scolaire officiel publié par la communauté compétente, versionné par année scolaire.
+ * Aucun jeu de données n'est fourni tant qu'il n'a pas été vérifié dans la source officielle :
+ * les dates restent alors des approximations indicatives.
+ */
+export interface OfficialSchoolCalendar {
+  authority: 'fwb' | 'vl';
+  /** Année scolaire, par exemple « 2026-2027 ». */
+  schoolYear: string;
+  version: string;
+  source: string;
+  publishedOn: IsoDate;
+  /** Rentrée de cette année scolaire. */
+  start: IsoDate;
+  /** Début des vacances d'été qui terminent cette année scolaire. */
+  summerHolidays: IsoDate;
+}
+
+/** Registre des calendriers officiels vérifiés (vide : aucune date officielle n'est inventée). */
+export const OFFICIAL_SCHOOL_CALENDARS: readonly OfficialSchoolCalendar[] = [];
+
+export interface ResolvedSchoolDate {
+  date: IsoDate;
+  source: 'confirmed_by_user' | 'official_calendar' | 'school_calendar' | 'user';
+  indicative: boolean;
+  /** Version du calendrier officiel ou source déclarée par la personne. */
+  detail?: string;
+}
+
+const authorityOf = (id: SchoolCalendarId): OfficialSchoolCalendar['authority'] | null => (id === 'be-fwb' ? 'fwb' : id === 'be-vl' ? 'vl' : null);
+
+/**
+ * Résolution d'une date scolaire, par priorité :
+ * 1. date corrigée ou confirmée par la personne (jamais écrasée) ;
+ * 2. calendrier officiel versionné de la communauté choisie ;
+ * 3. calendrier personnalisé (jours saisis) ;
+ * 4. approximation indicative.
+ */
+export function resolveSchoolDates(
+  year: number,
+  prefs: Pick<PlanningPreferences, 'schoolCalendar' | 'customSchool' | 'schoolOverrides'>,
+  official: readonly OfficialSchoolCalendar[] = OFFICIAL_SCHOOL_CALENDARS,
+): { start: ResolvedSchoolDate; holidays: ResolvedSchoolDate } {
+  const approx = schoolDates(year, prefs);
+  const authority = authorityOf(prefs.schoolCalendar);
+  const pick = (kind: 'start' | 'holidays'): ResolvedSchoolDate => {
+    const o = (prefs.schoolOverrides ?? []).find((x) => x.kind === kind && x.year === year);
+    if (o) return { date: o.date, source: 'confirmed_by_user', indicative: false, detail: o.source };
+    if (authority) {
+      // La rentrée de l'année Y ouvre l'année scolaire Y-(Y+1) ; les vacances d'été de Y clôturent (Y-1)-Y.
+      const schoolYear = kind === 'start' ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+      const cal = official.filter((c) => c.authority === authority && c.schoolYear === schoolYear)
+        .sort((a, b) => (a.publishedOn < b.publishedOn ? 1 : -1))[0];
+      if (cal) return { date: kind === 'start' ? cal.start : cal.summerHolidays, source: 'official_calendar', indicative: false, detail: `${cal.source} (version ${cal.version})` };
+    }
+    const date = kind === 'start' ? approx.start : approx.holidays;
+    if (prefs.schoolCalendar === 'custom' && prefs.customSchool) return { date, source: 'user', indicative: true, detail: 'calendrier personnalisé' };
+    return { date, source: 'school_calendar', indicative: true };
+  };
+  return { start: pick('start'), holidays: pick('holidays') };
+}
 
 export interface CalendarEvent {
   id: string;
@@ -115,7 +195,11 @@ export interface CalendarEvent {
   label: string;
   /** Date calculée (scolaire ou religieuse) : indicative, à vérifier ou confirmer. */
   indicative: boolean;
-  source: 'school_calendar' | 'tabular_estimate' | 'confirmed_by_user' | 'user' | 'goal' | 'detected';
+  source: 'school_calendar' | 'official_calendar' | 'tabular_estimate' | 'confirmed_by_user' | 'user' | 'goal' | 'detected';
+  /** Précision sur la source (version du calendrier officiel, source d'une correction). */
+  detail?: string;
+  /** Événements ajoutés : personnel (privé) ou partagé avec le foyer. */
+  visibility?: 'private' | 'household';
   /** Projet ou montant associé : une date n'est jamais une obligation financière. */
   goalId?: string;
   religious: boolean;
@@ -133,6 +217,8 @@ export interface CalendarInput {
   eidDates: ReadonlyArray<{ civilYear: number; date: IsoDate; confirmed: boolean; goalId: string }>;
   /** Dépenses annuelles détectées dans les opérations (série annuelle). */
   annualExpenses: ReadonlyArray<{ key: string; label: string; nextDate: IsoDate; categorySlug: string | null }>;
+  /** Calendriers scolaires officiels (registre par défaut ; injectable pour les tests). */
+  officialSchoolCalendars?: readonly OfficialSchoolCalendar[];
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -184,9 +270,9 @@ export function familyCalendar(input: CalendarInput): CalendarEvent[] {
   const religious = input.religiousEnabled && prefs.groups.includes('religious');
 
   for (const y of years) {
-    const s = schoolDates(y, prefs);
-    out.push({ id: `school_start:${y}`, type: 'school_start', date: s.start, label: 'Rentrée scolaire', indicative: true, source: 'school_calendar', religious: false });
-    out.push({ id: `summer_holidays:${y}`, type: 'summer_holidays', date: s.holidays, label: 'Début des vacances d’été', indicative: true, source: 'school_calendar', religious: false });
+    const s = resolveSchoolDates(y, prefs, input.officialSchoolCalendars ?? OFFICIAL_SCHOOL_CALENDARS);
+    out.push({ id: `school_start:${y}`, type: 'school_start', date: s.start.date, label: 'Rentrée scolaire', indicative: s.start.indicative, source: s.start.source, detail: s.start.detail, religious: false });
+    out.push({ id: `summer_holidays:${y}`, type: 'summer_holidays', date: s.holidays.date, label: 'Début des vacances d’été', indicative: s.holidays.indicative, source: s.holidays.source, detail: s.holidays.detail, religious: false });
     if (religious) {
       for (const [type, month, day, label] of [['ramadan', 9, 1, 'Début du Ramadan'], ['eid_al_fitr', 10, 1, 'Aïd al-Fitr']] as const) {
         const confirmed = prefs.confirmations.find((c) => c.type === type && c.year === y);
@@ -199,8 +285,10 @@ export function familyCalendar(input: CalendarInput): CalendarEvent[] {
     }
   }
   for (const e of input.customEvents) {
+    // Classification explicite : un événement religieux n'apparaît qu'avec le consentement.
+    if (e.religious && !input.religiousEnabled) continue;
     const date = e.yearly ? nextYearly(e.date, asOf) : e.date;
-    out.push({ id: `custom:${e.id}`, type: 'custom', date, label: e.label, indicative: false, source: 'user', religious: false });
+    out.push({ id: `custom:${e.id}`, type: 'custom', date, label: e.label, indicative: false, source: 'user', religious: e.religious === true, visibility: e.religious ? 'private' : e.visibility ?? 'private' });
   }
   for (const a of input.annualExpenses) out.push({ id: `annual:${a.key}`, type: 'annual_expense', date: a.nextDate, label: a.label, indicative: true, source: 'detected', religious: false });
   for (const g of input.goalDeadlines) {

@@ -379,6 +379,28 @@ export const calendarEventSchema = z.object({
   label: z.string().trim().min(2, 'Libellé trop court.').max(80, 'Libellé trop long (80 caractères au plus).'),
   date: isoDate('Date'),
   yearly: z.string().optional().transform((v) => v === 'on' || v === 'yes'),
+  // Personnel par défaut ; le partage avec le foyer est un choix volontaire
+  visibility: z.enum(['private', 'household'], { message: 'Visibilité invalide.' }).optional().default('private'),
+  // Classification religieuse explicite (case cochée), jamais déduite du libellé
+  religious: z.string().optional().transform((v) => v === 'on' || v === 'yes'),
+}).transform((d) => (d.religious ? { ...d, visibility: 'private' as const } : d));
+
+/** Date scolaire corrigée ou confirmée par la personne (prime sur tout recalcul). */
+export const schoolDateOverrideSchema = z.object({
+  kind: z.enum(['start', 'holidays'], { message: 'Type de date invalide.' }),
+  year: z.string().regex(/^\d{4}$/).transform(Number),
+  date: isoDate('Date'),
+  source: z.string().trim().min(3, 'Indiquez la source (école, courrier, site officiel…).').max(200),
+}).refine((d) => d.date.startsWith(`${d.year}-`), { path: ['date'], message: 'La date doit tomber dans l’année indiquée.' });
+
+export const schoolDateResetSchema = z.object({
+  kind: z.enum(['start', 'holidays']),
+  year: z.string().regex(/^\d{4}$/).transform(Number),
+});
+
+/** Démonstration : date de référence simulée (vide : date de départ). */
+export const simulationDateSchema = z.object({
+  date: z.string().trim().optional().transform((v) => v || null).pipe(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide.').nullable()),
 });
 
 export const religiousDateConfirmationSchema = z.object({

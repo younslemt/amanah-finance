@@ -5,6 +5,7 @@ import {
   DEMO_LIMITS, initialDemoState, opAddAllocation, opChooseStrategy, opCreateEid, opCreateGoal, opSavePlan, opSetDeclaredCapacity,
   opSetLifecycle, opUpdateEidBudget, opUpdateEidDate, opUpdateGoal, parseDemoState, demoHistory, type DemoState, type OpResult,
   opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences,
+  demoAsOf, opSetSimulationDate, SIMULATION_MAX,
 } from './goals/demo-state.ts';
 import { deflateRawSync } from 'node:zlib';
 import { decodeDemoState, encodeDemoState, toChunks } from './goals/demo-codec.ts';
@@ -192,5 +193,67 @@ describe('démonstration interactive : projets sans base de données', () => {
     expect(opCreateGoal(s, renewal, today).ok).toBe(false); // une seule fois
     // Modèles du chantier distinct : refusés
     expect(opCreateGoal(s, { ...renewal, previousGoalId: null, templateId: 'retraite', occurrence: null }, today).ok).toBe(false);
+  });
+
+  it('date de référence simulée : échéances, suggestions et données fictives recalculées, projets inchangés', () => {
+    const base = initialDemoState();
+    expect(demoAsOf(base)).toBe(today);
+    expect(opSetSimulationDate(base, '2026-10-01').ok).toBe(false); // avant la date de départ
+    expect(opSetSimulationDate(base, '2029-01-01').ok).toBe(false); // au-delà de 24 mois
+    expect(SIMULATION_MAX).toBe('2028-11-09');
+    const at = (d: string) => {
+      const st = must(opSetSimulationDate(base, d)).state;
+      const h = getDemoHousehold(st);
+      const calendar = familyCalendar({ asOf: h.asOf, prefs: st.planning.prefs, religiousEnabled: true, customEvents: st.planning.events, goalDeadlines: [], eidDates: [], annualExpenses: [] });
+      const sug = suggestGoals({
+        asOf: h.asOf, prefs: st.planning.prefs, religiousEnabled: true, calendar, decisions: [], goals: [], eidYears: [],
+        availableCapacityCents: capacityForGoal(buildSnapshot(h).savingsPlan, '__n__').availableCents,
+      });
+      return { st, h, calendar, sug, snap: buildSnapshot(h) };
+    };
+    // Janvier : Ramadan 2027 proche ; juillet : rentrée ; automne : projets de l'année suivante
+    const jan = at('2027-01-15');
+    expect(jan.h.asOf).toBe('2027-01-15');
+    expect(jan.sug.find((x) => x.id === 'ramadan:2027')?.status).toBe('new');
+    expect(jan.calendar[0]!.date >= '2027-01-15').toBe(true);
+    const jul = at('2027-07-15');
+    expect(jul.sug.find((x) => x.id === 'rentree-scolaire:2027')?.status).toBe('new');
+    expect(jul.sug.some((x) => x.id === 'ramadan:2027')).toBe(false); // passé
+    expect(jul.calendar.every((e) => e.date >= '2027-07-15')).toBe(true);
+    const oct = at('2027-10-15');
+    expect(oct.calendar.some((e) => e.type === 'ramadan' && e.date.startsWith('2028'))).toBe(true);
+    // Données bancaires fictives décalées : aucune opération postérieure, mois courant = mois simulé
+    for (const r of [jan, jul, oct]) {
+      expect(r.h.transactions.every((t) => t.bookedOn <= r.h.asOf)).toBe(true);
+      expect(r.h.transactions.some((t) => t.bookedOn.slice(0, 7) === r.h.asOf.slice(0, 7))).toBe(true);
+      expect(r.snap.month.month).toBe(r.h.asOf.slice(0, 7));
+    }
+    // Projets inchangés ; une affectation datée après la date simulée est ignorée
+    expect(jul.h.goals.map((g) => g.targetDate)).toEqual(getDemoHousehold(base).goals.map((g) => g.targetDate));
+    let later = must(opAddAllocation(jul.st, 'goal-hajj', 10_000, '2027-07-15')).state;
+    later = must(opSetSimulationDate(later, null)).state;
+    expect(demoAsOf(later)).toBe(today);
+    expect(getDemoHousehold(later).allocations.some((a) => a.allocatedOn === '2027-07-15')).toBe(false);
+    expect(parseDemoState(jul.st)).toEqual(jul.st);
+  });
+
+  it('calendrier de démonstration : événements personnels, partagés, religieux toujours privés ; état antérieur relu', () => {
+    let s = must(opAddCalendarEvent(initialDemoState(), { label: 'Veillée fictive', date: '2027-03-05', yearly: false, visibility: 'household', religious: true })).state;
+    expect(s.planning.events.at(-1)).toMatchObject({ visibility: 'private', religious: true });
+    s = must(opAddCalendarEvent(s, { label: 'Anniversaire fictif', date: '2027-03-06', yearly: true, visibility: 'household' })).state;
+    expect(s.planning.events.at(-1)).toMatchObject({ visibility: 'household', religious: false });
+    s = must(opAddCalendarEvent(s, { label: 'Rendez-vous fictif', date: '2027-03-07', yearly: false })).state;
+    expect(s.planning.events.at(-1)).toMatchObject({ visibility: 'private', religious: false });
+    // Un état v2 antérieur (sans visibilité, corrections scolaires ni date simulée) reste lisible
+    const old = JSON.parse(JSON.stringify(initialDemoState()));
+    old.planning.events = [{ id: 'evt-x', label: 'Ancien', date: '2027-01-01', yearly: false }];
+    delete old.planning.simulationDate; delete old.planning.prefs.schoolOverrides;
+    const parsed = parseDemoState(old)!;
+    expect(parsed.planning.events[0]).toMatchObject({ visibility: 'private', religious: false });
+    expect(parsed.planning.simulationDate).toBe(null);
+    expect(parsed.planning.prefs.schoolOverrides).toEqual([]);
+    // Un événement religieux partagé (contenu altéré) est refusé
+    old.planning.events = [{ id: 'evt-y', label: 'Altéré', date: '2027-01-01', yearly: false, visibility: 'household', religious: true }];
+    expect(parseDemoState(old)).toBe(null);
   });
 });

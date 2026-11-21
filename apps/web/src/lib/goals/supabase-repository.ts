@@ -142,31 +142,33 @@ export function supabaseGoalRepository(ctx: SessionContext): GoalRepository {
       return ok(undefined);
     },
     async planning() {
-      // Préférences et décisions : privées (user_id = soi) ; calendrier : partagé par le foyer
+      // Préférences et décisions : privées (user_id = soi). Calendrier : la RLS ne renvoie que les
+      // événements personnels de la personne et ceux partagés volontairement avec le foyer.
       const [p, d, e] = await Promise.all([
-        db.from('planning_preferences').select('groups, has_children, has_vehicle, interests, school_calendar, custom_school, confirmations').eq('user_id', ctx.userId).maybeSingle(),
+        db.from('planning_preferences').select('groups, has_children, has_vehicle, interests, school_calendar, custom_school, confirmations, school_overrides').eq('user_id', ctx.userId).maybeSingle(),
         db.from('suggestion_decisions').select('suggestion_id, status, until').eq('user_id', ctx.userId),
-        db.from('calendar_events').select('id, label, event_date, yearly').eq('household_id', hid).order('event_date'),
+        db.from('calendar_events').select('id, label, event_date, yearly, visibility, religious, created_by').eq('household_id', hid).order('event_date'),
       ]);
       if (p.error) throw p.error;
       if (d.error) throw d.error;
       if (e.error) throw e.error;
-      const row = p.data as null | { groups: string[]; has_children: boolean | null; has_vehicle: boolean | null; interests: string[]; school_calendar: string; custom_school: PlanningPreferences['customSchool']; confirmations: PlanningPreferences['confirmations'] };
+      const row = p.data as null | { groups: string[]; has_children: boolean | null; has_vehicle: boolean | null; interests: string[]; school_calendar: string; custom_school: PlanningPreferences['customSchool']; confirmations: PlanningPreferences['confirmations']; school_overrides: PlanningPreferences['schoolOverrides'] };
       const prefs: PlanningPreferences = row ? {
         groups: row.groups as PlanningPreferences['groups'], hasChildren: row.has_children, hasVehicle: row.has_vehicle, interests: row.interests,
-        schoolCalendar: row.school_calendar as PlanningPreferences['schoolCalendar'], customSchool: row.custom_school ?? null, confirmations: row.confirmations ?? [],
+        schoolCalendar: row.school_calendar as PlanningPreferences['schoolCalendar'], customSchool: row.custom_school ?? null, confirmations: row.confirmations ?? [], schoolOverrides: row.school_overrides ?? [],
       } : DEFAULT_PLANNING_PREFERENCES;
       return {
         prefs,
         decisions: ((d.data ?? []) as Array<{ suggestion_id: string; status: 'snoozed' | 'dismissed'; until: string | null }>)
           .map((x) => ({ id: x.suggestion_id, status: x.status, ...(x.until ? { until: x.until } : {}) })),
-        events: ((e.data ?? []) as Array<{ id: string; label: string; event_date: string; yearly: boolean }>).map((x) => ({ id: x.id, label: x.label, date: x.event_date, yearly: x.yearly })),
+        events: ((e.data ?? []) as Array<{ id: string; label: string; event_date: string; yearly: boolean; visibility: 'private' | 'household'; religious: boolean; created_by: string }>)
+          .map((x) => ({ id: x.id, label: x.label, date: x.event_date, yearly: x.yearly, visibility: x.visibility, religious: x.religious, mine: x.created_by === ctx.userId })),
       };
     },
     async savePlanningPreferences(prefs) {
       const { error } = await db.from('planning_preferences').upsert({
         user_id: ctx.userId, household_id: hid, groups: prefs.groups, has_children: prefs.hasChildren, has_vehicle: prefs.hasVehicle,
-        interests: prefs.interests, school_calendar: prefs.schoolCalendar, custom_school: prefs.customSchool, confirmations: prefs.confirmations,
+        interests: prefs.interests, school_calendar: prefs.schoolCalendar, custom_school: prefs.customSchool, confirmations: prefs.confirmations, school_overrides: prefs.schoolOverrides ?? [],
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
       return error ? dbError('planning preferences', error) : ok(undefined);
@@ -183,7 +185,12 @@ export function supabaseGoalRepository(ctx: SessionContext): GoalRepository {
       return error ? dbError('suggestion decision', error) : ok(undefined);
     },
     async addCalendarEvent(e) {
-      const { error } = await db.from('calendar_events').insert({ household_id: hid, label: e.label, event_date: e.date, yearly: e.yearly });
+      // Classification explicite ; un événement religieux est toujours privé (contrainte et RLS en base)
+      const religious = e.religious === true && ctx.religiousEnabled;
+      const { error } = await db.from('calendar_events').insert({
+        household_id: hid, label: e.label, event_date: e.date, yearly: e.yearly,
+        visibility: religious ? 'private' : e.visibility ?? 'private', religious,
+      });
       return error ? dbError('calendar event', error) : ok(undefined);
     },
     async removeCalendarEvent(id) {

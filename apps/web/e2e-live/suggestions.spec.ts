@@ -68,6 +68,14 @@ test.describe.serial('Suggestions de projets — mode réel', () => {
     await add.getByLabel('Date').fill(`${new Date().getUTCFullYear() + 1}-02-10`);
     await add.getByRole('button', { name: 'Ajouter au calendrier' }).click();
     await expect(page.locator('[data-testid="evenement"][data-type="custom"]')).toContainText('Assurance auto fictive');
+    // Personnel par défaut ; sans consentement, aucune case « religieux »
+    await expect(page.locator('[data-testid="evenement"]', { hasText: 'Assurance auto fictive' }).getByTestId('visibilite-evenement')).toHaveAttribute('data-visibility', 'private');
+    await expect(add.getByLabel(/Événement religieux/)).toHaveCount(0);
+    await add.getByLabel('Libellé').fill('Anniversaire familial fictif');
+    await add.getByLabel('Date').fill(`${new Date().getUTCFullYear() + 1}-03-10`);
+    await add.getByLabel('Tout mon foyer (partage volontaire)').check();
+    await add.getByRole('button', { name: 'Ajouter au calendrier' }).click();
+    await expect(page.locator('[data-testid="evenement"]', { hasText: 'Anniversaire familial fictif' }).getByTestId('visibilite-evenement')).toHaveAttribute('data-visibility', 'household');
 
     // Activation volontaire des fonctions religieuses : suggestions et dates religieuses apparaissent
     await page.goto('/goals');
@@ -79,5 +87,27 @@ test.describe.serial('Suggestions de projets — mode réel', () => {
     await expect(prefs2.getByRole('status')).toContainText('recalculés');
     await page.goto('/goals/calendrier');
     await expect(page.locator('[data-testid="evenement"][data-type="ramadan"]').first()).toContainText('indicative');
+
+    // Événement religieux : classification explicite, toujours privé, même si « foyer » est choisi
+    const add2 = page.getByTestId('form-evenement');
+    await add2.getByLabel('Libellé').fill('Veillée fictive');
+    await add2.getByLabel('Date').fill(`${new Date().getUTCFullYear() + 1}-04-10`);
+    await add2.getByLabel('Tout mon foyer (partage volontaire)').check();
+    await add2.getByLabel(/Événement religieux/).check();
+    await add2.getByRole('button', { name: 'Ajouter au calendrier' }).click();
+    const vigil = page.locator('[data-testid="evenement"]', { hasText: 'Veillée fictive' }).getByTestId('visibilite-evenement');
+    await expect(vigil).toHaveAttribute('data-religious', 'yes');
+    await expect(vigil).toHaveAttribute('data-visibility', 'private');
+
+    // Retrait du consentement avec effacement : l'événement religieux disparaît, les autres restent
+    await page.goto('/finance-islamique');
+    const withdraw = page.getByTestId('form-retrait-finance-islamique');
+    await withdraw.getByLabel(/Les effacer/).check();
+    await withdraw.getByRole('button', { name: 'Retirer mon consentement' }).click();
+    await expect(page).toHaveURL(/retrait=erase/);
+    await page.goto('/goals/calendrier');
+    await expect(page.locator('[data-testid="evenement"]', { hasText: 'Veillée fictive' })).toHaveCount(0);
+    await expect(page.locator('[data-testid="evenement"]', { hasText: 'Anniversaire familial fictif' })).toHaveCount(1);
+    await expect(page.locator('[data-testid="evenement"]', { hasText: 'Assurance auto fictive' })).toHaveCount(1);
   });
 });

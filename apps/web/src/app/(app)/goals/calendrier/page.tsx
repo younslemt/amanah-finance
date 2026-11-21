@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Badge, Card, CardTitle, Notice, PageHeader } from '@/components/ui';
 import { ActionForm } from '@/components/forms/action-form';
-import { Checkbox, Field } from '@/components/forms/fields';
+import { Checkbox, Field, RadioGroup } from '@/components/forms/fields';
 import { formatDate } from '@/lib/format';
 import { loadPlanning } from '@/lib/planning-data';
 import { EVENT_SOURCE_LABEL } from '@/lib/suggestion-text';
-import { addCalendarEvent, confirmReligiousDate, removeCalendarEvent } from '../../actions';
+import { addCalendarEvent, confirmReligiousDate, correctSchoolDate, removeCalendarEvent, resetSchoolDate } from '../../actions';
 
 export const metadata: Metadata = { title: 'Calendrier financier familial' };
 
@@ -19,6 +19,7 @@ const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
  */
 export default async function CalendarPage() {
   const { calendar, suggestions, planning, religiousEnabled } = await loadPlanning();
+  const ownEvent = new Map(planning.events.map((e) => [`custom:${e.id}`, e.mine]));
   const byMonth = new Map<string, typeof calendar>();
   for (const e of calendar) byMonth.set(e.date.slice(0, 7), [...(byMonth.get(e.date.slice(0, 7)) ?? []), e]);
   const suggestionFor = (type: string, year: string) => suggestions.find((x) => x.status !== 'dismissed' && x.dueDate?.startsWith(year) &&
@@ -46,7 +47,15 @@ export default async function CalendarPage() {
                         <p className="font-medium">{e.label}</p>
                         <p className="text-sm">{formatDate(e.date)} {e.indicative ? <Badge tone="warning">indicative</Badge> : null}</p>
                       </div>
-                      <p className="text-xs text-ink-muted">Source : {EVENT_SOURCE_LABEL[e.source]}</p>
+                      <p className="text-xs text-ink-muted">
+                        Source : {e.type === 'custom' && ownEvent.get(e.id) === false ? 'partagée par un membre du foyer' : EVENT_SOURCE_LABEL[e.source]}
+                        {e.detail ? ` — ${e.detail}` : ''}
+                        {e.type === 'custom' ? (
+                          <span className="ml-2" data-testid="visibilite-evenement" data-visibility={e.visibility} data-religious={e.religious ? 'yes' : 'no'}>
+                            <Badge tone={e.visibility === 'household' ? 'positive' : 'neutral'}>{e.religious ? 'religieux · privé' : e.visibility === 'household' ? 'partagé avec le foyer' : 'personnel'}</Badge>
+                          </span>
+                        ) : null}
+                      </p>
                       <div className="mt-2 flex flex-wrap gap-3 text-sm">
                         {e.goalId ? <Link href={`/goals/${e.goalId}`} className="text-primary-800 underline">Voir le projet</Link> : null}
                         {sug && sug.status !== 'accepted' ? <Link href={sug.href} className="text-primary-800 underline" data-testid="preparer-depuis-calendrier">Préparer ce projet</Link> : null}
@@ -56,6 +65,23 @@ export default async function CalendarPage() {
                           </ActionForm>
                         ) : null}
                       </div>
+                      {e.type === 'school_start' || e.type === 'summer_holidays' ? (
+                        <details className="mt-2 text-sm">
+                          <summary className="cursor-pointer text-primary-800">{e.source === 'confirmed_by_user' ? 'Modifier la correction' : 'Corriger la date'}</summary>
+                          <ActionForm action={correctSchoolDate} submitLabel="Enregistrer la date" testId="corriger-date-scolaire" className="mt-2 grid gap-2 sm:grid-cols-3">
+                            <input type="hidden" name="kind" value={e.type === 'school_start' ? 'start' : 'holidays'} />
+                            <input type="hidden" name="year" value={e.date.slice(0, 4)} />
+                            <Field label="Date exacte" name="date" type="date" defaultValue={e.date} required />
+                            <Field label="Source" name="source" required hint="École, courrier, site officiel…" />
+                          </ActionForm>
+                          {e.source === 'confirmed_by_user' ? (
+                            <ActionForm action={resetSchoolDate} submitLabel="Retirer ma correction" variant="quiet" testId="retirer-correction-scolaire" className="mt-2">
+                              <input type="hidden" name="kind" value={e.type === 'school_start' ? 'start' : 'holidays'} />
+                              <input type="hidden" name="year" value={e.date.slice(0, 4)} />
+                            </ActionForm>
+                          ) : null}
+                        </details>
+                      ) : null}
                       {religiousEnabled && e.indicative && (e.type === 'ramadan' || e.type === 'eid_al_fitr') ? (
                         <details className="mt-2 text-sm">
                           <summary className="cursor-pointer text-primary-800">Confirmer la date</summary>
@@ -83,7 +109,19 @@ export default async function CalendarPage() {
           <Field label="Libellé" name="label" required maxLength={80} />
           <Field label="Date" name="date" type="date" required />
           <div className="self-end"><Checkbox name="yearly" label="Revient chaque année" /></div>
+          <div className="sm:col-span-3">
+            <RadioGroup name="visibility" legend="Qui peut voir cette échéance ?" defaultValue="private" options={[
+              { value: 'private', label: 'Moi seulement (personnel)' },
+              { value: 'household', label: 'Tout mon foyer (partage volontaire)' },
+            ]} />
+          </div>
+          {religiousEnabled ? (
+            <div className="sm:col-span-3">
+              <Checkbox name="religious" label={<>Événement religieux <span className="text-ink-muted">— reste toujours privé et sera supprimé si vous retirez votre consentement</span></>} />
+            </div>
+          ) : null}
         </ActionForm>
+        <p className="mt-2 text-xs text-ink-muted">Le caractère religieux d’un événement n’est jamais déduit de son libellé : seule la case ci-dessus le classe comme tel.</p>
         {planning.events.length > 0 ? <p className="mt-2 text-xs text-ink-muted">{planning.events.length} échéance(s) personnalisée(s).</p> : null}
       </Card>
     </>

@@ -3,6 +3,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { DataSync } from '@/components/pwa/data-sync';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession } from '@/lib/supabase/session';
+import { readDemoState } from '@/lib/goals/demo-repository';
+import { demoAsOf } from '@/lib/goals/demo-state';
 
 /**
  * Toutes les pages de l'application : en mode réel, session ET parcours d'accueil
@@ -10,5 +12,7 @@ import { requireOnboardedSession } from '@/lib/supabase/session';
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const displayName = isDemoMode ? null : (await requireOnboardedSession()).displayName;
-  return <AppShell demo={isDemoMode} displayName={displayName}>{children}<DataSync /></AppShell>;
+  // Démonstration : date de référence (simulée ou de départ), affichée dans le bandeau
+  const demoDate = isDemoMode ? demoAsOf((await readDemoState()).state) : null;
+  return <AppShell demo={isDemoMode} demoDate={demoDate} displayName={displayName}>{children}<DataSync /></AppShell>;
 }
