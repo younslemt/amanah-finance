@@ -80,3 +80,21 @@ export function buildSavingsPlan(input: {
     imbalance: { overcommitted: over > 0, lateGoals: lines.filter((l) => l.status === 'late').length, underfundedGoals: lines.filter((l) => l.status === 'underfunded').length },
   };
 }
+
+/** Capacité vue depuis un projet : ce que les AUTRES projets engagent déjà, et ce qui reste disponible. */
+export interface GoalCapacity {
+  capacityCents: Cents | null;
+  capacitySource: SavingsPlan['capacitySource'];
+  /** Mensualités prévues pour les autres projets actifs (capacité déjà engagée). */
+  engagedByOthersCents: Cents;
+  /** Capacité encore libre pour ce projet (0 si les autres projets dépassent déjà la capacité). */
+  availableCents: Cents | null;
+}
+
+export function capacityForGoal(plan: SavingsPlan, goalId: string): GoalCapacity {
+  const engaged = plan.lines.filter((l) => l.goalId !== goalId).reduce((s, l) => s + l.plannedCents, 0);
+  return {
+    capacityCents: plan.capacityCents, capacitySource: plan.capacitySource, engagedByOthersCents: engaged,
+    availableCents: plan.capacityCents === null ? null : Math.max(0, plan.capacityCents - engaged),
+  };
+}

@@ -4,7 +4,6 @@ import { Badge, Card, CardTitle, Notice, PageHeader, Stat } from '@/components/u
 import { ActionForm } from '@/components/forms/action-form';
 import { Field } from '@/components/forms/fields';
 import { getSnapshot } from '@/lib/data';
-import { isDemoMode } from '@/lib/env';
 import { formatCents, formatDate } from '@/lib/format';
 import { fr } from '@/messages/fr';
 import { saveDeclaredCapacity, saveSavingsPlan } from '../../actions';
@@ -42,7 +41,7 @@ export default async function SavingsPlanPage() {
 
       <Card className="mt-4">
         <CardTitle>Répartition et incidence sur les dates</CardTitle>
-        {p.lines.length === 0 ? <p className="text-sm text-ink-muted">Aucun projet actif. <Link href="/goals" className="underline">Créer un projet</Link></p> : (
+        {p.lines.length === 0 ? <p className="text-sm text-ink-muted">Aucun projet actif. <Link href="/goals/nouveau" className="underline">Ajouter un objectif</Link></p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="lignes-plan">
               <caption className="sr-only">Répartition mensuelle de l’épargne par projet</caption>
@@ -69,7 +68,7 @@ export default async function SavingsPlanPage() {
         )}
       </Card>
 
-      {!isDemoMode && p.lines.length > 0 ? (
+      {p.lines.length > 0 ? (
         <Card className="mt-4">
           <CardTitle>Modifier mes montants et mes priorités</CardTitle>
           <ActionForm action={saveSavingsPlan} submitLabel="Enregistrer le plan" testId="form-plan-epargne" className="space-y-3">
@@ -92,7 +91,7 @@ export default async function SavingsPlanPage() {
         </Card>
       ) : null}
 
-      {!isDemoMode ? (
+      {(
         <Card className="mt-4">
           <CardTitle>Ma capacité d’épargne mensuelle</CardTitle>
           <p className="mb-3 text-sm text-ink-muted">Facultatif : si vous la renseignez, elle remplace l’estimation calculée d’après vos opérations{s.analysis.capacity.estimatedCents !== null ? ` (${formatCents(s.analysis.capacity.estimatedCents)} par mois)` : ''}. Laissez vide pour utiliser l’estimation.</p>
@@ -100,7 +99,7 @@ export default async function SavingsPlanPage() {
             <Field label="Capacité mensuelle (€)" name="capacity" inputMode="decimal" defaultValue={p.capacitySource === 'declared' && p.capacityCents !== null ? input(p.capacityCents) : ''} />
           </ActionForm>
         </Card>
-      ) : null}
+      )}
     </>
   );
 }

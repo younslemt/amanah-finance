@@ -1,10 +1,10 @@
 import { categorize, type AnalysisCategory, type CategorizationRule, type Transaction } from '@amanah/engines';
 import {
-  DEMO_ACCOUNTS, DEMO_ALLOCATIONS, DEMO_AS_OF, DEMO_ASSETS, DEMO_GOALS, DEMO_LIABILITIES,
+  DEMO_ACCOUNTS, DEMO_AS_OF, DEMO_ASSETS, DEMO_LIABILITIES,
   DEMO_PRICES, DEMO_TRANSACTIONS,
 } from '@amanah/banking';
 import { accountsToAssets, type HouseholdData } from './snapshot.ts';
-import { DEMO_AID_ALLOCATIONS, DEMO_AID_GOAL } from './demo-eid.ts';
+import { initialDemoState, toEngineAllocations, toEngineGoal, type DemoState } from './goals/demo-state.ts';
 
 /** Miroir des catégories système de la migration 0005 (utilisé en mode démo). */
 export const SYSTEM_CATEGORIES: AnalysisCategory[] = [
@@ -45,7 +45,11 @@ export const DEMO_RULES: CategorizationRule[] = [
   { pattern: 'DON ', categorySlug: 'dons', direction: 'debit', priority: 60 },
 ];
 
-export function getDemoHousehold(): HouseholdData {
+/**
+ * Foyer fictif. Les projets, affectations et capacité déclarée viennent de l'état de la
+ * démonstration interactive (données de départ si la personne n'a encore rien modifié).
+ */
+export function getDemoHousehold(state: DemoState = initialDemoState()): HouseholdData {
   const transactions: Transaction[] = DEMO_TRANSACTIONS.map((t, i) => ({
     id: `demo-tx-${i}`,
     accountId: t.accountExternalId,
@@ -78,8 +82,8 @@ export function getDemoHousehold(): HouseholdData {
       { month: '2026-08', categorySlug: 'energie', limitCents: 15_000 },
       { month: '2026-08', categorySlug: 'transport', limitCents: 5_000 },
     ],
-    goals: [...DEMO_GOALS, DEMO_AID_GOAL],
-    allocations: [...DEMO_ALLOCATIONS, ...DEMO_AID_ALLOCATIONS],
+    goals: state.goals.map(toEngineGoal),
+    allocations: toEngineAllocations(state),
     assets: [...accountsToAssets(accounts), ...DEMO_ASSETS],
     liabilities: DEMO_LIABILITIES,
     prices: DEMO_PRICES,
@@ -95,7 +99,7 @@ export function getDemoHousehold(): HouseholdData {
       },
     },
     // Capacité d'épargne déclarée fictive (plan des projets)
-    declaredSavingsCapacityCents: 50_000,
+    declaredSavingsCapacityCents: state.declaredCapacityCents,
     emergencyFundMonths: 3,
   };
 }

@@ -4,7 +4,7 @@
  */
 import {
   analyzeFinances, recommend, type AnalysisBudget, type AnalysisCategory, type CategoryNature, type FinancialAnalysis, type Recommendation,
-  buildSavingsPlan, calculateZakat, computeNetWorth, detectInterest, isPlannable, type SavingsPlan, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
+  buildSavingsPlan, calculateZakat, isArchived, computeNetWorth, detectInterest, isPlannable, type SavingsPlan, observedMonthlyPace, planEmergencyFund, planGoal, summarizeMonth,
   type Goal, type GoalAllocation, type GoalPlan, type MetalPrice, type MonthSummary,
   summarizePurification, type PurificationCandidate, type PurificationItem, type PurificationSummary, type Transaction, type WealthSummary, type ZakatAsset, type ZakatLiability,
   type PreparedZakat, type PriceEntry, type ZakatChoices, type ZakatResult, prepareZakat,
@@ -99,7 +99,8 @@ export function buildSnapshot(data: HouseholdData): HouseholdSnapshot {
     plan: planGoal(goal, data.allocations, data.asOf, observedMonthlyPace(data.allocations, goal.id, data.asOf)),
   }));
   // Les sommes affectées aux objectifs restent sur les comptes : la réserve = liquidités non affectées
-  const allocated = goals.reduce((s, g) => s + g.plan.savedCents, 0);
+  // Projets archivés : hors calcul (comme avant leur conservation pour consultation)
+  const allocated = goals.filter((g) => !isArchived(g.goal)).reduce((s, g) => s + g.plan.savedCents, 0);
   const emergencyFund = planEmergencyFund(avgEssential, data.emergencyFundMonths, Math.max(0, totalBalance - allocated));
 
   const prepared = prepareZakat({

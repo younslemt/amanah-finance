@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFinances, buildSavingsPlan, planGoal, recommend, type Goal, type GoalAllocation } from '../src/index.ts';
+import { analyzeFinances, buildSavingsPlan, capacityForGoal, planGoal, recommend, type Goal, type GoalAllocation } from '../src/index.ts';
 
 // Famille fictive : capacité d'épargne de 500 €/mois
 const asOf = '2026-11-20';
@@ -38,6 +38,18 @@ describe('plan d’épargne des projets', () => {
     expect(hajj).toMatchObject({ plannedCents: 15_000, fundedCents: 15_000 });
     expect(etudes).toMatchObject({ plannedCents: 10_000, fundedCents: 0, fundedDate: null, status: 'underfunded' });
     expect(p.imbalance).toMatchObject({ overcommitted: true, underfundedGoals: 1 });
+  });
+
+  it('capacité vue d’un projet : engagée par les autres projets, disponible pour celui-ci, jamais comptée deux fois', () => {
+    const p = buildSavingsPlan({ asOf, estimatedCapacityCents: 50_000, declaredCapacityCents: null, goals: withPlans(goals), allocations });
+    // Aïd : les autres projets engagent 150 + 100 + 100 = 350 € ; 150 € restent pour lui (dont ses 50 € prévus)
+    expect(capacityForGoal(p, 'aid')).toEqual({ capacityCents: 50_000, capacitySource: 'estimated', engagedByOthersCents: 35_000, availableCents: 15_000 });
+    const tight = buildSavingsPlan({ asOf, estimatedCapacityCents: 30_000, declaredCapacityCents: null, goals: withPlans(goals), allocations });
+    expect(capacityForGoal(tight, 'etudes').availableCents).toBe(0); // les autres dépassent déjà la capacité
+    const unknown = buildSavingsPlan({ asOf, estimatedCapacityCents: null, declaredCapacityCents: null, goals: withPlans(goals), allocations });
+    expect(capacityForGoal(unknown, 'aid').availableCents).toBe(null);
+    // Un nouveau projet sans ligne : toute la capacité non engagée lui est disponible
+    expect(capacityForGoal(p, 'nouveau')).toMatchObject({ engagedByOthersCents: 40_000, availableCents: 10_000 });
   });
 
   it('modifier les priorités change qui est servi en premier', () => {

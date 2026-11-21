@@ -1,12 +1,15 @@
 'use server';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { writeGoalRepository, type GoalRepository } from '@/lib/goals';
+import { resetDemoState } from '@/lib/goals/demo-repository';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession, type SessionContext } from '@/lib/supabase/session';
 import { formError, formOk, type FormState } from '@/lib/form-state';
 import { isReligiousGoal } from '@amanah/engines';
 import {
   accountSchema, allocationSchema, budgetSchema, categorySchema, customCategorySlug, fieldErrorsOf,
-  declaredCapacitySchema, formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, savingsPlanSchema, transactionSchema,
+  declaredCapacitySchema, formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, savingsPlanSchema, strategySchema, transactionSchema,
 } from '@/lib/validation';
 
 /**
@@ -88,106 +91,117 @@ export async function saveBudget(_p: FormState, fd: FormData): Promise<FormState
 
 const KIND_LABEL: Record<string, string> = {
   hajj: 'Hajj', omra: 'Omra', children_education: 'Études des enfants', real_estate: 'Achat immobilier', retirement: 'Retraite',
-  family_savings: 'Épargne familiale', emergency_fund: 'Réserve d’urgence', personal: 'Projet personnel',
+  family_savings: 'Épargne familiale', emergency_fund: 'Réserve de précaution', personal: 'Projet personnel',
 };
-const brusselsToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
+
+// --- Projets : toutes les écritures passent par le dépôt (démonstration ou Supabase) ----
+/** Dépôt d'écriture, ou état d'erreur (rôle en lecture seule). */
+async function goals(): Promise<GoalRepository | FormState> {
+  const r = await writeGoalRepository();
+  return 'error' in r ? formError(r.error) : r;
+}
+const isRepoError = (v: GoalRepository | FormState): v is FormState => 'status' in v;
+const fromRepo = (r: { ok: false; error: string; fieldErrors?: Record<string, string> }) => formError(r.error, r.fieldErrors);
 
 /**
- * Création d'un projet, de toute catégorie. Projets généraux : communs au foyer, sans
- * consentement religieux. Hajj et Omra : consentement article 9 (vérifié ici, imposé par la RLS).
+ * Création d'un projet, de toute catégorie (plusieurs projets d'une même catégorie possibles).
+ * Projets généraux : communs au foyer, sans consentement religieux. Hajj et Omra : consentement
+ * article 9 en mode réel (vérifié ici, imposé par la RLS). Ouvre ensuite la fiche du projet.
  */
 export async function createGoal(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = goalSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
   const d = parsed.data;
-  if (isReligiousGoal(d.kind) && !ctx.religiousEnabled) return formError('Les projets Hajj et Omra demandent d’activer les fonctions de finance islamique (consentement explicite).');
-  const today = brusselsToday();
-  if (d.targetDate <= today) return formError('Vérifiez les informations saisies.', { targetDate: 'La date souhaitée doit être dans le futur.' });
-  // Projet et épargne initiale dans UNE transaction (fonction SQL) : jamais de projet à moitié enregistré
-  const { error } = await ctx.supabase.rpc('create_goal_with_allocation', {
-    p_household_id: ctx.householdId, p_kind: d.kind, p_name: d.name ?? KIND_LABEL[d.kind], p_target_cents: d.target, p_target_date: d.targetDate,
-    p_monthly_capacity_cents: d.monthlyCapacity, p_initial_cents: d.available, p_allocated_on: today,
+  if (isReligiousGoal(d.kind) && !repo.religiousEnabled) return formError('Les projets Hajj et Omra demandent d’activer les fonctions de finance islamique (consentement explicite).');
+  if (d.targetDate <= repo.today()) return formError('Vérifiez les informations saisies.', { targetDate: 'La date souhaitée doit être dans le futur.' });
+  const r = await repo.create({
+    kind: d.kind, name: d.name ?? KIND_LABEL[d.kind]!, targetCents: d.target, targetDate: d.targetDate,
+    monthlyCapacityCents: d.monthlyCapacity, initialCents: d.available,
   });
-  return error ? dbError('goal', error) : done(`Objectif ${KIND_LABEL[d.kind]} créé : « ${d.name ?? KIND_LABEL[d.kind]} ».`);
+  if (!r.ok) return fromRepo(r);
+  revalidatePath('/', 'layout');
+  redirect(`/goals/${r.value.id}?cree=1`);
 }
 
-/** Modification d'un projet : la catégorie et les affectations ne changent pas ; la base journalise l'avant / après. */
+/**
+ * Modification du plan d'un projet : la catégorie et les affectations ne changent pas ;
+ * l'historique garde l'avant / après. « Valider mon plan » marque l'étape Planifier.
+ */
 export async function updateGoal(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = goalUpdateSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
   const d = parsed.data;
-  const { error, count } = await ctx.supabase.from('goals').update({
-    name: d.name, target_cents: d.target, target_date: d.targetDate, monthly_capacity_cents: d.monthlyCapacity, priority: d.priority,
-  }, { count: 'exact' }).eq('id', d.id).eq('household_id', ctx.householdId);
-  if (error) return dbError('goal update', error);
-  if (count !== 1) return formError('Projet introuvable ou non modifiable.');
-  return done('Projet mis à jour. L’historique des affectations est conservé.');
+  const r = await repo.update(d.id, { name: d.name, targetCents: d.target, targetDate: d.targetDate, monthlyCapacityCents: d.monthlyCapacity, priority: d.priority }, { confirmPlan: d.confirm });
+  if (!r.ok) return fromRepo(r);
+  return done(d.confirm ? 'Plan validé. L’historique des affectations est conservé.' : 'Projet mis à jour. L’historique des affectations est conservé.');
+}
+
+/** « Simuler » : la personne retient un scénario ; il devient la mensualité prévue du projet. */
+export async function chooseStrategy(_p: FormState, fd: FormData): Promise<FormState> {
+  const repo = await goals(); if (isRepoError(repo)) return repo;
+  const parsed = strategySchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Scénario invalide.');
+  const r = await repo.chooseStrategy(parsed.data.goalId, parsed.data.monthly);
+  if (!r.ok) return fromRepo(r);
+  return done('Stratégie retenue : elle devient la mensualité prévue du projet. Rien n’est versé ni dépensé.');
 }
 
 /** Réaliser, rouvrir, mettre en pause, reprendre ou archiver : rien n'est effacé. */
 export async function setGoalLifecycle(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = goalLifecycleSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
   const d = parsed.data;
-  if (d.realizedOn && d.realizedOn > brusselsToday()) return formError('Vérifiez les informations saisies.', { realizedOn: 'La date de réalisation ne peut pas être dans le futur.' });
-  const update = {
-    achieve: { status: 'achieved', realized_on: d.realizedOn },
-    reopen: { status: 'active', realized_on: null },
-    pause: { status: 'paused', realized_on: null },
-    resume: { status: 'active', realized_on: null },
-    archive: { status: 'archived', realized_on: null },
-  }[d.action];
-  const { error, count } = await ctx.supabase.from('goals').update(update, { count: 'exact' }).eq('id', d.id).eq('household_id', ctx.householdId);
-  if (error) return dbError('goal lifecycle', error);
-  if (count !== 1) return formError('Projet introuvable ou non modifiable.');
+  if (d.realizedOn && d.realizedOn > repo.today()) return formError('Vérifiez les informations saisies.', { realizedOn: 'La date de réalisation ne peut pas être dans le futur.' });
+  const r = await repo.setLifecycle(d.id, d.action, d.realizedOn);
+  if (!r.ok) return fromRepo(r);
   const msg = { achieve: 'Projet marqué comme réalisé.', reopen: 'Projet rouvert.', pause: 'Projet mis en pause : il sort de la planification.', resume: 'Projet repris.', archive: 'Projet archivé : son historique est conservé.' }[d.action];
   return done(msg);
 }
 
 /**
  * Plan d'épargne : montant mensuel prévu et priorité de chaque projet. Rien n'est versé ni
- * dépensé ; la base journalise chaque changement de projet (goal_changes).
+ * dépensé ; chaque changement de projet est journalisé.
  */
 export async function saveSavingsPlan(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = savingsPlanSchema.safeParse({
     goalIds: fd.getAll('goalId').map(String), monthly: fd.getAll('monthly').map(String), priority: fd.getAll('priority').map(String),
   });
   if (!parsed.success) return formError('Vérifiez les montants et les priorités.', fieldErrorsOf(parsed.error));
   const d = parsed.data;
-  for (let i = 0; i < d.goalIds.length; i++) {
-    // RLS : un projet religieux d'une autre personne n'est ni visible ni modifiable
-    const { error } = await ctx.supabase.from('goals').update({ monthly_capacity_cents: d.monthly[i], priority: d.priority[i] })
-      .eq('id', d.goalIds[i]!).eq('household_id', ctx.householdId);
-    if (error) return dbError('savings plan', error);
-  }
+  const r = await repo.savePlan(d.goalIds.map((goalId, i) => ({ goalId, monthlyCents: d.monthly[i]!, priority: d.priority[i]! })));
+  if (!r.ok) return fromRepo(r);
   return done('Plan d’épargne enregistré. Aucune somme n’est déplacée : ce sont des mises de côté prévues.');
 }
 
 export async function saveDeclaredCapacity(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = declaredCapacitySchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez le montant.', fieldErrorsOf(parsed.error));
-  const { error } = await ctx.supabase.from('household_savings_settings').upsert({
-    household_id: ctx.householdId, declared_capacity_cents: parsed.data.capacity, updated_at: new Date().toISOString(),
-  }, { onConflict: 'household_id' });
-  if (error) return dbError('declared capacity', error);
+  const r = await repo.setDeclaredCapacity(parsed.data.capacity);
+  if (!r.ok) return fromRepo(r);
   return done(parsed.data.capacity === null ? 'Capacité déclarée retirée : l’estimation de l’analyse est utilisée.' : 'Capacité d’épargne mensuelle enregistrée.');
 }
 
+/** Affectation virtuelle (ajout ou retrait) : ni une dépense, ni un virement. */
 export async function allocateToGoal(_p: FormState, fd: FormData): Promise<FormState> {
-  const ctx = await writableContext(); if (isState(ctx)) return ctx;
+  const repo = await goals(); if (isRepoError(repo)) return repo;
   const parsed = allocationSchema.safeParse(formDataToObject(fd));
   if (!parsed.success) return formError('Vérifiez les informations saisies.', fieldErrorsOf(parsed.error));
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
   const amount = parsed.data.direction === 'remove' ? -parsed.data.amount : parsed.data.amount;
-  const { error } = await ctx.supabase.from('goal_allocations').insert({
-    household_id: ctx.householdId, goal_id: parsed.data.goalId, amount_cents: amount, allocated_on: today,
-  });
-  return error ? dbError('allocation', error) : done(amount > 0 ? 'Montant affecté à l’objectif.' : 'Montant retiré de l’objectif.');
+  const r = await repo.addAllocation(parsed.data.goalId, amount);
+  if (!r.ok) return fromRepo(r);
+  return done(amount > 0 ? 'Montant affecté à l’objectif.' : 'Montant retiré de l’objectif.');
+}
+
+/** Démonstration : retour aux données fictives de départ (mode réel : sans objet). */
+export async function resetDemo(_p: FormState, _fd: FormData): Promise<FormState> {
+  if (!isDemoMode) return formError('Réinitialisation réservée au mode démonstration.');
+  await resetDemoState();
+  return done('Démonstration réinitialisée : les données fictives de départ sont rétablies.');
 }
 
 // --- Sprint 3 : choix du foyer pour l'analyse ------------------------------------

@@ -11,9 +11,12 @@ describe('formulaires des projets', () => {
     const r = goalSchema.safeParse(base);
     expect(r.success).toBe(true);
     if (r.success) expect(r.data).toMatchObject({ kind: 'children_education', name: null, target: 1_200_000, available: 200_000, monthlyCapacity: 30_000 });
-    for (const kind of ['real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal', 'hajj', 'omra']) {
+    for (const kind of ['real_estate', 'retirement', 'family_savings', 'emergency_fund', 'hajj', 'omra']) {
       expect(goalSchema.safeParse({ ...base, kind }).success).toBe(true);
     }
+    // Projet personnel : dénomination libre obligatoire (voyage, mariage, véhicule…)
+    expect(goalSchema.safeParse({ ...base, kind: 'personal' }).success).toBe(false);
+    expect(goalSchema.safeParse({ ...base, kind: 'personal', name: 'Création d’entreprise' }).success).toBe(true);
     expect(goalSchema.safeParse({ ...base, kind: 'voyage' }).success).toBe(false);
   });
   it('création : épargne disponible supérieure à la cible refusée ; capacité mensuelle obligatoire', () => {
@@ -26,6 +29,11 @@ describe('formulaires des projets', () => {
     expect(goalUpdateSchema.safeParse(u).success).toBe(true);
     expect(goalUpdateSchema.safeParse({ ...u, priority: '6' }).success).toBe(false);
     expect(goalUpdateSchema.safeParse({ ...u, name: ' ' }).success).toBe(false);
+    // « Valider mon plan » : décision explicite de l'étape Planifier
+    const c = goalUpdateSchema.safeParse({ ...u, confirm: 'yes' });
+    expect(c.success && c.data.confirm).toBe(true);
+    expect(goalUpdateSchema.safeParse({ ...u, id: 'demo-12' }).success).toBe(true); // identifiant fictif de démonstration
+    expect(goalUpdateSchema.safeParse({ ...u, id: "1' or '1'='1" }).success).toBe(false);
   });
   it('réaliser exige une date ; les autres actions non', () => {
     const id = '00000000-0000-4000-8000-000000000001';
@@ -49,7 +57,7 @@ describe('formulaires des projets', () => {
     expect(eidSchema.safeParse({ ...aid, dateStatus: 'confirmed' }).success).toBe(false);
     expect(eidSchema.safeParse({ ...aid, dateStatus: 'confirmed', dateSource: 'Mosquée fictive' }).success).toBe(true);
     expect(eidSchema.safeParse({ ...aid, available: '331' }).success).toBe(false);
-    expect(eidSchema.safeParse({ ...aid, previousGoalId: 'pas-un-uuid' }).success).toBe(false);
+    expect(eidSchema.safeParse({ ...aid, previousGoalId: '../x' }).success).toBe(false);
     expect(eidDateSchema.safeParse({ goalId: '00000000-0000-4000-8000-000000000001', targetDate: '2027-05-16', dateStatus: 'confirmed', dateSource: 'Mosquée fictive' }).success).toBe(true);
   });
   it('Aïd : lecture du plan et historique lisible des changements de date', () => {

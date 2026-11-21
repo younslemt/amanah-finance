@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allocationHistory, goalJourney, isPlannable, isReligiousGoal, planGoal, simulateGoalPace, GENERAL_GOAL_KINDS, RELIGIOUS_GOAL_KINDS,
+  allocationHistory, compareScenarios, defaultScenarioMonthlies, goalJourney, isPlannable, isReligiousGoal, planGoal, simulateGoalPace, GENERAL_GOAL_KINDS, RELIGIOUS_GOAL_KINDS,
   type Goal, type GoalAllocation,
 } from '../src/index.ts';
 
@@ -30,16 +30,55 @@ describe('projets universels', () => {
     ]);
   });
 
-  it('parcours Créer → Planifier → Simuler → Suivre → Réaliser, sans rien supposer', () => {
-    const noPlan = { ...etudes, monthlyCapacityCents: undefined };
-    expect(goalJourney(noPlan, planGoal(noPlan, [], asOf), 0).current).toBe('plan');
-    const planned = planGoal(etudes, [], asOf);
-    expect(goalJourney(etudes, planned, 0)).toMatchObject({ current: 'follow', done: { create: true, plan: true, simulate: true, follow: false } });
-    const zero = { ...etudes, monthlyCapacityCents: 0 };
-    expect(goalJourney(zero, planGoal(zero, [], asOf), 0).current).toBe('simulate'); // rythme nul : aucune date estimable
-    expect(goalJourney(etudes, planGoal(etudes, allocs, asOf), 3).current).toBe('realize');
+  it('parcours : une étape n’est franchie que par une action de l’utilisateur, jamais par un calcul', () => {
+    // Capacité connue et date calculable : ni « Planifier » ni « Simuler » ne sont pour autant validés
+    const created = goalJourney(etudes, planGoal(etudes, [], asOf), []);
+    expect(created.done).toEqual({ create: true, plan: false, simulate: false, follow: false, realize: false });
+    expect(created.next).toEqual({ step: 'plan', action: 'confirm_plan' });
+    expect(created.status).toMatchObject({ create: 'done', plan: 'available', simulate: 'available', follow: 'available', realize: 'available' });
+    // L'épargne déclarée à la création n'est pas un suivi
+    const initial: GoalAllocation[] = [{ goalId: 'g1', amountCents: 200_000, allocatedOn: asOf, source: 'initial' }];
+    expect(goalJourney(etudes, planGoal(etudes, initial, asOf), initial).done.follow).toBe(false);
+    // Parcours non linéaire : simuler avant de planifier est possible et reconnu
+    const simulatedFirst = { ...etudes, strategy: { monthlyCents: 40_000, chosenOn: asOf } };
+    const j1 = goalJourney(simulatedFirst, planGoal(simulatedFirst, [], asOf), []);
+    expect(j1.done.simulate).toBe(true);
+    expect(j1.next?.action).toBe('confirm_plan');
+    const all = { ...simulatedFirst, planConfirmedOn: asOf };
+    expect(goalJourney(all, planGoal(all, [], asOf), []).next).toEqual({ step: 'follow', action: 'record_allocation' });
+    expect(goalJourney(all, planGoal(all, allocs, asOf), allocs).next).toEqual({ step: 'follow', action: 'keep_saving' });
+  });
+
+  it('parcours : cible atteinte, réalisation, pause et archive', () => {
+    const full = { ...etudes, targetCents: 100_000 };
+    const ready = goalJourney(full, planGoal(full, allocs, asOf), allocs);
+    expect(ready.readyToRealize).toBe(true);
+    expect(ready.next).toEqual({ step: 'realize', action: 'declare_realized' });
     const realized = { ...etudes, lifecycle: 'achieved' as const, realizedOn: '2026-11-19' };
-    expect(goalJourney(realized, planGoal(realized, allocs, asOf), 3).done.realize).toBe(true);
+    const r = goalJourney(realized, planGoal(realized, allocs, asOf), allocs);
+    expect(r.done.realize).toBe(true);
+    expect(r.next?.action).toBe('explore_solutions');
+    expect(r.status.plan).toBe('locked');
+    const paused = { ...etudes, lifecycle: 'paused' as const };
+    expect(goalJourney(paused, planGoal(paused, [], asOf), []).next?.action).toBe('resume');
+    const archived = { ...etudes, lifecycle: 'archived' as const };
+    expect(goalJourney(archived, planGoal(archived, [], asOf), []).next).toBe(null);
+  });
+
+  it('comparaison de scénarios : Aïd 480 €, 120 € disponibles, 30 / 60 / 90 € par mois', () => {
+    const aid: Goal = { id: 'aid', kind: 'eid_al_adha', name: 'Aïd fictif', targetCents: 48_000, targetDate: '2027-05-20' };
+    const a: GoalAllocation[] = [{ goalId: 'aid', amountCents: 12_000, allocatedOn: asOf, source: 'initial' }];
+    const c = compareScenarios(aid, a, asOf, [3_000, 6_000, 9_000], 7_000);
+    expect(c.remainingCents).toBe(36_000);
+    expect(c.monthsLeft).toBe(6);
+    expect(c.monthlyRequiredCents).toBe(6_000);
+    expect(c.scenarios.map((x) => [x.months, x.gapMonths, x.meetsDeadline, x.exceedsAvailable])).toEqual([
+      [12, 6, false, false], [6, 0, true, false], [4, -2, true, true],
+    ]);
+    expect(c.scenarios[0]!.completionDate).toBe('2027-11-20');
+    expect(compareScenarios(aid, a, asOf, [0], null).scenarios[0]).toMatchObject({ months: null, meetsDeadline: null, exceedsAvailable: null });
+    expect(defaultScenarioMonthlies(6_000)).toEqual([3_000, 6_000, 9_000]);
+    expect(defaultScenarioMonthlies(0)).toEqual([]);
   });
 
   it('simulation d’un rythme : aucune écriture, date estimée recalculée, rythme invalide refusé', () => {

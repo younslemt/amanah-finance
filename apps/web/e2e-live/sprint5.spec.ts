@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { activateIslamicFinance, apiToken, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm } from './helpers';
+import { activateIslamicFinance, apiToken, completeOnboarding, createGoalWithWizard, euros, fakeUser, fillEidWizard, latestLink, rest, signIn, signUpAndConfirm } from './helpers';
 
 /**
  * Sprint 5 en mode réel, sur mobile et ordinateur. Utilisateurs et montants FICTIFS.
@@ -20,20 +20,18 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await page.goto(await latestLink(K.email, 'signup', sentAt));
     await completeOnboarding(page, K.name);
     await page.goto('/goals');
+    await expect(page.getByTestId('projets-religieux-fermes')).toBeVisible();
+    await page.getByTestId('ajouter-objectif').click();
     const form = page.getByTestId('form-objectif');
     await expect(form.getByTestId('etape-formulaire')).toHaveCount(3);
-    await expect(form.getByRole('option', { name: /^(Hajj|Omra)/ })).toHaveCount(0);
-    await expect(page.getByTestId('projets-religieux-fermes')).toBeVisible();
-    await form.getByLabel('Catégorie').selectOption('children_education');
-    await form.getByLabel('Nom du projet (facultatif)').fill('Études fictives');
-    await form.getByLabel('Montant cible (€)').fill('12 000');
-    await form.getByLabel('Épargne déjà disponible (€)').fill('2 000');
-    await form.getByLabel('Capacité d’épargne mensuelle (€)').fill('300');
-    await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-    const card = page.getByRole('article').filter({ hasText: 'Études fictives' });
-    await expect(card).toContainText(euros('2 000,00 €'));
-    // Créé, planifié, simulable et déjà suivi (épargne initiale) : prochaine étape « Réaliser »
-    await expect(card.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'realize');
+    await expect(form.getByRole('radio', { name: /^(Hajj|Omra)/ })).toHaveCount(0);
+    await createGoalWithWizard(page, { category: 'Études des enfants', name: 'Études fictives', target: '12 000', available: '2 000', monthly: '300' });
+    await expect(page.getByTestId('plan-projet')).toContainText(euros('2 000,00 €'));
+    // L'épargne initiale ne vaut pas « Suivre », une date calculable ne vaut pas « Simuler » : prochaine étape « Planifier »
+    await expect(page.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'plan');
+    await expect(page.getByTestId('action-principale')).toHaveAttribute('data-action', 'confirm_plan');
+    await page.goto('/goals');
+    await expect(page.getByRole('article').filter({ hasText: 'Études fictives' }).getByTestId('prochaine-action')).toHaveText('Valider mon plan d’épargne');
     // Côté base : un projet Hajj est refusé sans consentement
     const token = await apiToken(K);
     const [{ id: hid }] = (await (await rest(token, 'households?select=id')).json()) as Array<{ id: string }>;
@@ -49,24 +47,41 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await page.getByRole('article').filter({ hasText: 'Études fictives' }).getByTestId('lien-projet').click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Études fictives');
 
-    // Simuler : rien n'est enregistré
-    await page.getByTestId('form-simuler').getByLabel('Et si j’épargnais par mois (€)').fill('500');
-    await page.getByTestId('form-simuler').getByRole('button', { name: 'Simuler' }).click();
-    await expect(page.getByTestId('resultat-simulation')).toContainText('rien n’est enregistré');
-    await expect(page.getByTestId('resultat-simulation')).toContainText('20 mois'); // 10 000 € / 500 €
+    // Planifier : modification de la cible et validation du plan (décision de l'utilisateur)
+    const plan = page.getByTestId('form-planifier');
+    await plan.getByLabel('Montant cible (€)').fill('12 000');
+    await plan.getByRole('button', { name: 'Valider mon plan' }).click();
+    await expect(page.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'simulate');
+
+    // Simuler : plusieurs scénarios comparés, rien n'est enregistré avant le choix
+    const sim = page.getByTestId('form-simuler');
+    await sim.getByLabel('Scénario 1 (€/mois)').fill('500');
+    await sim.getByLabel('Scénario 2 (€/mois)').fill('250');
+    await sim.getByLabel('Scénario 3 (€/mois)').fill('');
+    await sim.getByRole('button', { name: 'Comparer' }).click();
+    const scenarios = page.getByTestId('scenario');
+    await expect(scenarios).toHaveCount(2);
+    await expect(scenarios.first()).toContainText('20 mois'); // 10 000 € / 500 €
+    await expect(scenarios.nth(1)).toContainText('40 mois');
+    await expect(page.getByTestId('capacite-projet')).toContainText('Déjà engagée par vos autres projets');
+    await expect(page.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'simulate');
+    await scenarios.first().getByRole('button', { name: 'Retenir ce scénario' }).click();
+    await expect(page.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'follow');
+    await expect(page.getByTestId('plan-projet')).toContainText(euros('500,00 €'));
 
     // Suivre : mise de côté virtuelle
     const alloc = page.getByTestId('form-allocation');
     await alloc.getByLabel('Montant (€)').fill('250');
     await alloc.getByRole('button', { name: 'Valider' }).click();
     await expect(page.getByTestId('historique-affectations')).toContainText(euros('2 250,00 €'));
+    await expect(page.getByTestId('action-principale')).toHaveAttribute('data-action', 'keep_saving');
 
-    // Planifier : modification de la cible, historique des affectations intact
-    const plan = page.getByTestId('form-planifier');
-    await plan.getByLabel('Montant cible (€)').fill('15 000');
-    await plan.getByRole('button', { name: 'Enregistrer le plan' }).click();
+    // Modifier : historique des affectations intact
+    await page.getByTestId('form-planifier').getByLabel('Montant cible (€)').fill('15 000');
+    await page.getByTestId('form-planifier').getByRole('button', { name: /valider mon plan/i }).click();
     await expect(page.getByTestId('historique-modifications')).toContainText('Montant cible');
     await expect(page.getByTestId('historique-modifications')).toContainText(euros('15 000,00 €'));
+    await expect(page.getByTestId('historique-modifications')).toContainText('Stratégie retenue');
     await expect(page.getByTestId('historique-affectations')).toContainText(euros('2 250,00 €'));
     await expect(page.getByTestId('plan-projet')).toContainText(euros('15 000,00 €'));
 
@@ -74,6 +89,11 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await page.getByTestId('form-realiser').getByRole('button', { name: 'Marquer comme réalisé' }).click();
     await expect(page.getByTestId('form-rouvrir')).toBeVisible();
     await expect(page.getByTestId('parcours-projet')).toHaveAttribute('data-current', 'realize');
+    await expect(page.getByTestId('action-principale')).toHaveAttribute('data-action', 'explore_solutions');
+    await page.getByTestId('action-principale').click();
+    await expect(page.getByTestId('familles-solutions')).toContainText('Prestataires éducatifs');
+    await expect(page.getByText('aucune de vos données n’est transmise')).toBeVisible();
+    await page.goBack();
     await page.getByTestId('form-rouvrir').getByRole('button').click();
     await expect(page.getByTestId('form-realiser')).toBeVisible();
     await expect(page.getByTestId('historique-modifications').getByText(/^Statut :/)).toHaveCount(2);
@@ -88,11 +108,8 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
   test('avec consentement : projet Omra privé ; isolation entre foyers', async ({ page }) => {
     await signIn(page, K);
     await activateIslamicFinance(page, '/goals');
-    const form = page.getByTestId('form-objectif');
-    await form.getByLabel('Catégorie').selectOption('omra');
-    await form.getByLabel('Montant cible (€)').fill('5 000');
-    await form.getByLabel('Capacité d’épargne mensuelle (€)').fill('200');
-    await form.getByRole('button', { name: 'Créer l’objectif' }).click();
+    await createGoalWithWizard(page, { category: 'Omra', target: '5 000', monthly: '200' });
+    await page.goto('/goals');
     await expect(page.getByRole('article').filter({ hasText: 'Omra' })).toContainText('privé');
 
     await page.context().clearCookies(); // fin de session de K avant l'inscription de L
@@ -111,14 +128,9 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await signIn(page, K);
     await page.goto('/goals');
     await page.getByTestId('lien-preparer-aid').click();
-    await expect(page.getByTestId('estimation-aid')).toContainText('non officielle');
-    const form = page.getByTestId('form-aid');
-    await form.getByLabel('Sacrifice ou quote-part (€)').fill('350');
-    await form.getByLabel('Frais complémentaires (€)').fill('80');
-    await form.getByLabel('Contributions familiales annoncées (€)').fill('100');
-    await form.getByLabel('Effort d’épargne mensuel (€)').fill('50');
+    const form = await fillEidWizard(page, { sacrifice: '350', extras: '80', family: '100', monthly: '50' });
     await form.getByRole('button', { name: 'Créer mon projet Aïd' }).click();
-    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}\?cree=1$/);
     await expect(page.getByTestId('budget-aid')).toContainText(euros('330,00 €'));
     await expect(page.getByTestId('date-aid')).toContainText('Saisie, non confirmée');
 
@@ -148,20 +160,18 @@ test.describe.serial('Sprint 5 — projets de vie', () => {
     await expect(page.getByTestId('historique-affectations')).toContainText(euros('120,00 €'));
     await page.getByTestId('form-realiser').getByRole('button', { name: 'Marquer comme réalisé' }).click();
     await page.getByTestId('lien-reconduire').click();
-    const form = page.getByTestId('form-aid');
-    await expect(form.getByLabel('Sacrifice ou quote-part (€)')).toHaveValue('350,00'); // budget repris, modifiable
-    await form.getByLabel('Effort d’épargne mensuel (€)').fill('50');
+    await expect(page.getByTestId('form-aid').getByLabel('Sacrifice ou quote-part (€)')).toHaveValue('350,00'); // budget repris, modifiable
+    const form = await fillEidWizard(page, { monthly: '50' });
     await form.getByRole('button', { name: 'Créer l’Aïd de l’année suivante' }).click();
-    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}$/);
-    expect(page.url()).not.toBe(url);
+    await expect(page).toHaveURL(/\/goals\/[0-9a-f-]{36}\?cree=1$/);
+    expect(page.url().split('?')[0]).not.toBe(url);
     await expect(page.getByText('Aucune affectation.')).toBeVisible(); // aucun montant repris
     await page.goto(url);
     await expect(page.getByTestId('reconduction-aid')).toContainText('Reconduit');
     await expect(page.getByTestId('historique-affectations')).toContainText(euros('120,00 €'));
     // Reconduction multiple accidentelle : refusée
     await page.goto(`/goals/aid?suite=${url.split('/').pop()}`);
-    const again = page.getByTestId('form-aid');
-    await again.getByLabel('Effort d’épargne mensuel (€)').fill('50');
+    const again = await fillEidWizard(page, { monthly: '50' });
     await again.getByRole('button', { name: 'Créer l’Aïd de l’année suivante' }).click();
     await expect(again.getByRole('alert')).toContainText('déjà');
   });

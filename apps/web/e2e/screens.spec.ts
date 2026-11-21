@@ -14,6 +14,9 @@ const SCREENS = [
   { path: '/goals', heading: 'Projets de vie', nav: 'Projets' },
   { path: '/goals/goal-hajj', heading: 'Hajj en couple', nav: 'Projets' },
   { path: '/goals/goal-aid', heading: 'Aïd al-Adha 2027', nav: 'Projets' },
+  { path: '/goals/nouveau', heading: 'Ajouter un objectif', nav: 'Projets' },
+  { path: '/goals/goal-hajj/solutions', heading: 'Explorer les solutions pour concrétiser mon projet', nav: 'Projets' },
+  { path: '/goals/aid', heading: 'Préparer mon Aïd', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
   { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
   { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
@@ -109,8 +112,10 @@ test('les statuts de conformité reflètent les informations disponibles', async
   await expect(page.getByText('Rythme à déterminer').first()).toBeVisible();
   await expect(page.getByText('En retard').first()).toBeVisible();
   await expect(page.getByTestId('parcours-projet').first()).toBeVisible();
-  await page.goto('/goals/goal-hajj?mensuel=500');
-  await expect(page.getByTestId('resultat-simulation')).toContainText('rien n’est enregistré');
+  await page.goto('/goals/goal-hajj?s1=500');
+  await expect(page.getByTestId('scenario')).toHaveCount(1);
+  await expect(page.getByTestId('resultat-simulation')).toContainText('500,00');
+  await expect(page.getByText('Simulation seulement : rien n’est enregistré')).toBeVisible();
   await expect(page.getByTestId('historique-affectations')).toContainText('500,00');
   await page.goto('/goals/goal-aid');
   await expect(page.getByTestId('budget-aid')).toContainText('330,00');

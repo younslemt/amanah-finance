@@ -113,3 +113,38 @@ export async function activateIslamicFinance(page: Page, from: '/goals' | '/zaka
   await form.getByRole('button', { name: 'Activer' }).click();
   await expect(page).toHaveURL(new RegExp(`${from}$`));
 }
+
+/**
+ * Création d'un projet par l'assistant « Ajouter un objectif » (3 écrans, Précédent / Suivant).
+ * Le libellé de catégorie est celui de la carte (ex. « Études des enfants »).
+ */
+export async function createGoalWithWizard(page: Page, g: { category: string; name?: string; target: string; available?: string; monthly: string; date?: string }) {
+  await page.goto('/goals');
+  await page.getByTestId('ajouter-objectif').click();
+  await expect(page).toHaveURL(/\/goals\/nouveau/);
+  const form = page.getByTestId('form-objectif');
+  await form.getByRole('radio', { name: new RegExp(`^${g.category}`) }).check();
+  if (g.name) await form.getByLabel('Nom du projet').fill(g.name);
+  await form.getByTestId('etape-suivante').click();
+  await form.getByLabel('Montant cible (€)').fill(g.target);
+  if (g.date) await form.getByLabel('Date souhaitée').fill(g.date);
+  await form.getByTestId('etape-suivante').click();
+  if (g.available) await form.getByLabel('Épargne déjà disponible (€)').fill(g.available);
+  await form.getByLabel('Mensualité prévue (€)').fill(g.monthly);
+  await form.getByRole('button', { name: 'Créer l’objectif' }).click();
+  await expect(page).toHaveURL(/\/goals\/[^/?]+\?cree=1$/);
+  await expect(page.getByTestId('projet-cree')).toBeVisible();
+}
+
+/** Assistant Aïd : budget → date → épargne (les valeurs non fournies restent celles proposées). */
+export async function fillEidWizard(page: Page, v: { sacrifice?: string; extras?: string; family?: string; monthly: string }) {
+  const form = page.getByTestId('form-aid');
+  if (v.sacrifice !== undefined) await form.getByLabel('Sacrifice ou quote-part (€)').fill(v.sacrifice);
+  if (v.extras !== undefined) await form.getByLabel('Frais complémentaires (€)').fill(v.extras);
+  if (v.family !== undefined) await form.getByLabel('Contributions familiales annoncées (€)').fill(v.family);
+  await form.getByTestId('etape-suivante').click();
+  await expect(form.getByTestId('estimation-aid')).toContainText('non officielle');
+  await form.getByTestId('etape-suivante').click();
+  await form.getByLabel('Effort d’épargne mensuel (€)').fill(v.monthly);
+  return form;
+}

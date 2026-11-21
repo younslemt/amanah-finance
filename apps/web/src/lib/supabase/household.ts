@@ -14,6 +14,8 @@ export class NotAuthenticatedError extends Error {
 }
 
 const HISTORY_MONTHS = 6;
+/** Colonnes d'un projet, décisions du parcours comprises (migration 0021). */
+export const GOAL_COLUMNS = 'id, kind, name, target_cents, target_date, status, monthly_capacity_cents, priority, realized_on, plan_confirmed_on, strategy_monthly_cents, strategy_chosen_on';
 
 export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
   const supabase = await createSupabaseServerClient();
@@ -47,8 +49,8 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('account_balances').select('account_id, balance_cents').eq('household_id', hid),
     supabase.from('categories').select('slug, kind, is_essential, is_interest, household_id, label, default_nature'),
     supabase.from('budgets').select('category_slug, limit_cents, month').eq('household_id', hid).gte('month', since),
-    supabase.from('goals').select('id, kind, name, target_cents, target_date, status, monthly_capacity_cents, priority, realized_on').eq('household_id', hid).order('created_at'),
-    supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on').eq('household_id', hid),
+    supabase.from('goals').select(GOAL_COLUMNS).eq('household_id', hid).order('created_at'),
+    supabase.from('goal_allocations').select('goal_id, amount_cents, allocated_on, source').eq('household_id', hid),
     supabase.from('assets').select('id, kind, name, value_cents, weight_mg, purity_permille, is_accessible, receivable_likely, account_id, details').eq('household_id', hid),
     supabase.from('liabilities').select('id, name, outstanding_cents, due_12m_cents').eq('household_id', hid),
     supabase.from('market_prices').select('symbol, price_per_g_cents, as_of, source').eq('currency', 'EUR').order('as_of', { ascending: false }).limit(20),

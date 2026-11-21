@@ -91,6 +91,8 @@ export const hajjGoalSchema = z.object({
 });
 
 // --- Projets universels (Sprint 5) ----------------------------------------------
+/** Identifiant de projet : UUID (mode réel, vérifié aussi par le dépôt) ou identifiant fictif de démonstration. */
+export const goalIdField = (message = 'Projet invalide.') => z.string().regex(/^[0-9a-zA-Z-]{3,64}$/, message);
 export const GOAL_KINDS = ['children_education', 'real_estate', 'retirement', 'family_savings', 'emergency_fund', 'personal', 'hajj', 'omra'] as const;
 /** Création : la catégorie est choisie une fois (elle ne change plus) ; nom facultatif (libellé de la catégorie). */
 export const goalSchema = z.object({
@@ -100,11 +102,15 @@ export const goalSchema = z.object({
   available: z.string().trim().optional().transform((v) => (v ? v : '0')).pipe(amount('Épargne disponible')),
   targetDate: isoDate('Date souhaitée'),
   monthlyCapacity: amount('Capacité mensuelle'),
-}).refine((d) => d.available <= d.target, { path: ['available'], message: 'L’épargne disponible dépasse le montant cible.' });
+}).refine((d) => d.available <= d.target, { path: ['available'], message: 'L’épargne disponible dépasse le montant cible.' })
+  // Projet personnel : nom libre obligatoire (voyage, mariage, véhicule, création d'entreprise…)
+  .refine((d) => d.kind !== 'personal' || d.name !== null, { path: ['name'], message: 'Donnez un nom à votre projet personnel (par exemple : Voyage).' });
 
 /** Modification : l'historique des affectations n'est jamais touché. */
 export const goalUpdateSchema = z.object({
-  id: z.string().uuid('Projet invalide.'),
+  id: goalIdField(),
+  /** « Valider mon plan » : décision de l'étape Planifier. */
+  confirm: z.string().optional().transform((v) => v === 'yes'),
   name: z.string().trim().min(1, 'Nom du projet requis.').max(120),
   target: amount('Montant cible', { min: 1 }),
   targetDate: isoDate('Date souhaitée'),
@@ -113,7 +119,7 @@ export const goalUpdateSchema = z.object({
 });
 
 export const goalLifecycleSchema = z.object({
-  id: z.string().uuid('Projet invalide.'),
+  id: goalIdField(),
   action: z.enum(['achieve', 'reopen', 'pause', 'resume', 'archive'], { message: 'Action invalide.' }),
   realizedOn: z.string().optional().transform((v) => v || null).pipe(isoDate('Date de réalisation').nullable()),
 }).refine((d) => d.action !== 'achieve' || d.realizedOn !== null, { path: ['realizedOn'], message: 'Indiquez la date de réalisation.' });
@@ -141,22 +147,22 @@ export const eidSchema = z.object({
   ...eidDateFields,
   available: optionalAmountZero('Épargne disponible'),
   monthlyCapacity: amount('Effort d’épargne mensuel'),
-  previousGoalId: z.string().optional().transform((v) => v || null).pipe(z.string().uuid('Aïd précédent invalide.').nullable()),
+  previousGoalId: z.string().optional().transform((v) => v || null).pipe(goalIdField('Aïd précédent invalide.').nullable()),
 })
   .refine(budgetOk, { path: ['family'], message: 'Les contributions familiales couvrent tout le budget : rien à mettre de côté.' })
   .refine(sourceOk, { path: ['dateSource'], message: 'Une date confirmée doit indiquer sa source (mosquée, autorité suivie…).' })
   .refine((d) => d.available <= d.sacrifice + d.extras + d.organization - d.family, { path: ['available'], message: 'L’épargne disponible dépasse le montant à mettre de côté.' })
   .refine((d) => d.targetDate.startsWith(`${d.civilYear}-`), { path: ['targetDate'], message: 'La date doit tomber dans l’année civile choisie.' });
 
-export const eidDateSchema = z.object({ goalId: z.string().uuid('Projet invalide.'), ...eidDateFields })
+export const eidDateSchema = z.object({ goalId: goalIdField(), ...eidDateFields })
   .refine(sourceOk, { path: ['dateSource'], message: 'Une date confirmée doit indiquer sa source (mosquée, autorité suivie…).' });
 
-export const eidBudgetSchema = z.object({ goalId: z.string().uuid('Projet invalide.'), ...eidBudgetFields })
+export const eidBudgetSchema = z.object({ goalId: goalIdField(), ...eidBudgetFields })
   .refine(budgetOk, { path: ['family'], message: 'Les contributions familiales couvrent tout le budget : rien à mettre de côté.' });
 
 /** Plan d'épargne : un montant mensuel et une priorité par projet (lignes parallèles du formulaire). */
 export const savingsPlanSchema = z.object({
-  goalIds: z.array(z.string().uuid('Projet invalide.')).min(1, 'Aucun projet à planifier.').max(50),
+  goalIds: z.array(goalIdField()).min(1, 'Aucun projet à planifier.').max(50),
   monthly: z.array(amount('Montant mensuel')).max(50),
   priority: z.array(z.coerce.number().int().min(1, 'Priorité de 1 à 5.').max(5, 'Priorité de 1 à 5.')).max(50),
 }).refine((d) => d.monthly.length === d.goalIds.length && d.priority.length === d.goalIds.length, { message: 'Formulaire incomplet.' });
@@ -167,8 +173,14 @@ export const declaredCapacitySchema = z.object({
 
 export const simulationSchema = z.object({ monthly: amount('Épargne mensuelle simulée') });
 
+/** « Simuler » : stratégie retenue parmi les scénarios comparés. */
+export const strategySchema = z.object({
+  goalId: goalIdField(),
+  monthly: z.string().trim().min(1).regex(/^\d{1,12}$/, 'Scénario invalide.').transform(Number),
+});
+
 export const allocationSchema = z.object({
-  goalId: z.string().uuid('Objectif invalide.'),
+  goalId: goalIdField('Objectif invalide.'),
   direction: z.enum(['add', 'remove']),
   amount: amount('Montant', { min: 1 }),
 });

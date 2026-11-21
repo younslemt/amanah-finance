@@ -94,7 +94,25 @@ export const fr = {
     months: '{count} mois',
     kind: {
       hajj: 'Hajj', omra: 'Omra', eid_al_adha: 'Aïd al-Adha', children_education: 'Études des enfants', real_estate: 'Achat immobilier',
-      retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve d’urgence', personal: 'Projet personnel',
+      retirement: 'Retraite', family_savings: 'Épargne familiale', emergency_fund: 'Réserve de précaution', personal: 'Projet personnel',
+    },
+    kindHint: {
+      hajj: 'Pèlerinage : voyage, forfait, préparation', omra: 'Petit pèlerinage, seul ou en famille', eid_al_adha: 'Sacrifice ou quote-part, frais, famille',
+      children_education: 'Frais de scolarité, études supérieures', real_estate: 'Apport, frais de notaire, travaux', retirement: 'Compléter sa pension',
+      family_savings: 'Une épargne commune pour la famille', emergency_fund: 'Faire face aux imprévus', personal: 'Voyage, mariage, véhicule, création d’entreprise…',
+    },
+    stepStatus: { done: 'fait', available: 'disponible', locked: 'en attente' },
+    action: {
+      confirm_plan: 'Valider mon plan d’épargne', compare_scenarios: 'Comparer des scénarios', record_allocation: 'Enregistrer une première mise de côté',
+      keep_saving: 'Poursuivre : enregistrer une mise de côté', declare_realized: 'Cible atteinte : déclarer le projet réalisé',
+      resume: 'Reprendre le projet', explore_solutions: 'Explorer les solutions pour concrétiser mon projet',
+    },
+    stepHelp: {
+      create: 'Projet défini : catégorie, montant, échéance.',
+      plan: 'Construire et valider un plan d’épargne.',
+      simulate: 'Comparer plusieurs mensualités et retenir une stratégie.',
+      follow: 'Enregistrer des mises de côté virtuelles et mesurer la progression.',
+      realize: 'Constater l’atteinte de l’objectif et clore le projet.',
     },
   },
   zakat: {
