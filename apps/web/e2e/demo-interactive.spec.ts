@@ -21,6 +21,21 @@ function watch(page: Page): string[] {
   return log;
 }
 
+// Diagnostic automatique : en cas d'échec, journal et état de la page affichés dans le rapport CI
+let journal: string[] = [];
+test.beforeEach(({ page }) => { journal = watch(page); });
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return;
+  const state = await page.evaluate(() => ({
+    url: location.href,
+    erreurPage: !!document.querySelector('[data-testid="erreur-page"]'),
+    alertes: Array.from(document.querySelectorAll('[role="alert"]')).map((a) => a.textContent?.slice(0, 200)),
+    boutons: Array.from(document.querySelectorAll('form button')).map((b) => `${b.textContent}|${(b as HTMLButtonElement).type}|${(b as HTMLButtonElement).disabled}`).slice(0, 12),
+    sw: navigator.serviceWorker?.controller ? 'contrôlée' : 'non contrôlée',
+  })).catch(() => null);
+  console.log(`\n[DIAGNOSTIC] ${info.title} (${info.project.name})\nÉtat : ${JSON.stringify(state)}\n${journal.join('\n')}\n[FIN DIAGNOSTIC]`);
+});
+
 async function addGoal(page: Page, g: { category: string; name?: string; target: string; available?: string; monthly: string }) {
   await page.goto('/goals');
   await page.getByTestId('ajouter-objectif').click();
@@ -46,7 +61,6 @@ async function addGoal(page: Page, g: { category: string; name?: string; target:
 }
 
 test('assistant de création : une étape à la fois, retour en arrière sans perte de saisie', async ({ page }) => {
-  const log = watch(page);
   await page.goto('/goals/nouveau');
   const form = page.getByTestId('form-objectif');
   const steps = form.getByTestId('etape-formulaire');
@@ -72,17 +86,7 @@ test('assistant de création : une étape à la fois, retour en arrière sans pe
   await form.getByTestId('etape-suivante').click();
   await form.getByLabel('Mensualité prévue (€)').fill('150');
   await form.getByRole('button', { name: 'Créer l’objectif' }).click();
-  try {
-    await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel', { timeout: 15_000 });
-  } catch (e) {
-    const state = await page.evaluate(() => ({
-      erreurPage: !!document.querySelector('[data-testid="erreur-page"]'),
-      boutons: Array.from(document.querySelectorAll('[data-testid="form-objectif"] button')).map((b) => `${b.textContent}|${(b as HTMLButtonElement).type}|${(b as HTMLButtonElement).disabled}`),
-      etapes: Array.from(document.querySelectorAll('[data-wizard-step]')).map((f) => (f as HTMLElement).hidden),
-      sw: navigator.serviceWorker?.controller ? 'contrôlée' : 'non contrôlée',
-    }));
-    throw new Error(`${(e as Error).message}\nÉtat : ${JSON.stringify(state)}\nJournal :\n${log.join('\n')}`);
-  }
+  await expect(form.getByRole('alert')).toContainText('Donnez un nom à votre projet personnel', { timeout: 15_000 });
   await expect(form.getByLabel('Nom du projet')).toBeVisible();
   await expect(form.getByLabel('Montant cible (€)')).toHaveValue('3 000');
 });
