@@ -92,7 +92,11 @@ export function initialDemoState(): DemoState {
     // La première affectation de chaque projet fictif est son épargne de départ
     allocations: seedAllocations.map((a, i) => ({ goalId: a.goalId, amountCents: a.amountCents, allocatedOn: a.allocatedOn, source: first.get(a.goalId) === i ? 'initial' : 'manual' })),
     changes: [],
-    eidPlans: [DEMO_AID_PLAN],
+    eidPlans: [{
+      ...DEMO_AID_PLAN, owner_id: 'demo-user' as const,
+      sacrifice_cents: Number(DEMO_AID_PLAN.sacrifice_cents), extra_costs_cents: Number(DEMO_AID_PLAN.extra_costs_cents),
+      organization_cents: Number(DEMO_AID_PLAN.organization_cents), family_contribution_cents: Number(DEMO_AID_PLAN.family_contribution_cents),
+    }],
     declaredCapacityCents: 50_000,
   };
 }
