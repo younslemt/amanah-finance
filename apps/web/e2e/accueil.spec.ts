@@ -46,8 +46,7 @@ test('capacité d’épargne disponible : issue du plan d’épargne, distincte 
   const cap = page.getByTestId('capacite-disponible');
   await expect(cap).toContainText('Capacité d’épargne encore disponible · plan d’épargne');
   await expect(cap).toHaveAttribute('data-source', 'declared');
-  const amount = (await cap.textContent())!.match(/([\d\s  ]+) €\s*\/ mois/);
-  expect(amount).not.toBeNull();
+  await expect(cap).toContainText(/\d[\d\s\u202f\u00a0]*€\s*\/ mois/);
   await page.goto('/budget/plan-epargne');
   await expect(page.getByTestId('synthese-plan')).toBeVisible();
 });
