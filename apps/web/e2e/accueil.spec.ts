@@ -133,7 +133,7 @@ for (const layout of ['islamic_first', 'classic'] as const) {
       // Texte lisible : aucune police sous 11 px dans l'accueil
       const tiny = await page.getByTestId('accueil').evaluate((root) => [...root.querySelectorAll('*')].filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim()) && parseFloat(getComputedStyle(e).fontSize) < 11).length);
       expect(tiny, `${layout} à ${vp.width} px : textes trop petits`).toBe(0);
-      await page.screenshot({ path: info.outputPath(`accueil-${layout}-${vp.width}.png`), fullPage: true });
+      await page.screenshot({ path: info.outputPath(`accueil-${layout}-${vp.width}.jpg`), fullPage: true, type: 'jpeg', quality: 80 });
     }
     await setLayout(page, 'islamic_first');
   });

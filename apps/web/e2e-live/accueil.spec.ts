@@ -41,7 +41,7 @@ test.describe.serial('Accueil Islamic-first — mode réel', () => {
       for (const w of WIDTHS) {
         await page.setViewportSize({ width: w, height: w < 768 ? 844 : 900 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-        await page.screenshot({ path: info.outputPath(`accueil-sans-consentement-${w}.png`), fullPage: true });
+        await page.screenshot({ path: info.outputPath(`accueil-sans-consentement-${w}.jpg`), fullPage: true, type: 'jpeg', quality: 80 });
       }
       await page.setViewportSize({ width: 1280, height: 720 });
     }
@@ -70,7 +70,7 @@ test.describe.serial('Accueil Islamic-first — mode réel', () => {
     if (info.project.name === 'desktop') {
       for (const w of [375, 1440]) {
         await page.setViewportSize({ width: w, height: w < 768 ? 844 : 900 });
-        await page.screenshot({ path: info.outputPath(`accueil-zakat-incomplete-${w}.png`), fullPage: true });
+        await page.screenshot({ path: info.outputPath(`accueil-zakat-incomplete-${w}.jpg`), fullPage: true, type: 'jpeg', quality: 80 });
       }
       await page.setViewportSize({ width: 1280, height: 720 });
     }
