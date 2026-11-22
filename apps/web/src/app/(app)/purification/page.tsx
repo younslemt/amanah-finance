@@ -39,7 +39,8 @@ function Amounts({ v }: { v: PurificationView }) {
   );
 }
 
-function ItemCard({ v, children }: { v: PurificationView; children?: ReactNode }) {
+/** `editable` : élément de la personne ET droit d'écriture ; sinon consultation seule. */
+function ItemCard({ v, editable, children }: { v: PurificationView; editable: boolean; children?: ReactNode }) {
   return (
     <li className="py-4 first:pt-0 last:pb-0" data-testid="element-purification">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -50,7 +51,7 @@ function ItemCard({ v, children }: { v: PurificationView; children?: ReactNode }
         <Badge tone={statusTone[v.status]}>{statusLabel[v.status]}</Badge>
       </div>
       <Amounts v={v} />
-      {v.mine ? children : null}
+      {v.mine && editable ? children : null}
     </li>
   );
 }
@@ -69,7 +70,9 @@ export default async function PurificationPage() {
   const summary = purificationSummary(ownRows);
   const sharedCount = rows.length - ownRows.length;
   const by = (st: PurificationView['status']) => views.filter((v) => v.status === st);
-  const payable = by('confirmed').filter((v) => v.mine && v.amountToPurifyCents !== null);
+  // Lecture seule : consultation complète, aucune écriture proposée (les actions la refusent aussi)
+  const canWrite = ctx.canWrite;
+  const payable = canWrite ? by('confirmed').filter((v) => v.mine && v.amountToPurifyCents !== null) : [];
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
 
   return (
@@ -93,34 +96,46 @@ export default async function PurificationPage() {
           : ''}
       </p>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardTitle>Méthodologie de calcul</CardTitle>
-          <p className="mb-3 text-sm text-ink-muted">
-            {basis ? <>Choix actuel : <strong data-testid="methodologie-actuelle">{basisLabel[basis]}</strong>.</> : 'Aucune méthodologie choisie : les montants restent « à déterminer ».'}
-          </p>
-          <ActionForm action={setPurificationMethod} submitLabel="Enregistrer la méthodologie" variant="quiet" testId="form-methodologie">
-            <RadioGroup name="basis" legend="Purifier sur la base du…" defaultValue={basis ?? undefined}
-              options={[
-                { value: 'net_credited', label: <>Montant <strong>net crédité</strong> (ce que vous avez reçu)</> },
-                { value: 'gross', label: <>Montant <strong>brut</strong> (avant précompte mobilier) : brut ou précompte à saisir</> },
-              ]} />
-          </ActionForm>
+      {canWrite ? (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardTitle>Méthodologie de calcul</CardTitle>
+            <p className="mb-3 text-sm text-ink-muted">
+              {basis ? <>Choix actuel : <strong data-testid="methodologie-actuelle">{basisLabel[basis]}</strong>.</> : 'Aucune méthodologie choisie : les montants restent « à déterminer ».'}
+            </p>
+            <ActionForm action={setPurificationMethod} submitLabel="Enregistrer la méthodologie" variant="quiet" testId="form-methodologie">
+              <RadioGroup name="basis" legend="Purifier sur la base du…" defaultValue={basis ?? undefined}
+                options={[
+                  { value: 'net_credited', label: <>Montant <strong>net crédité</strong> (ce que vous avez reçu)</> },
+                  { value: 'gross', label: <>Montant <strong>brut</strong> (avant précompte mobilier) : brut ou précompte à saisir</> },
+                ]} />
+            </ActionForm>
+          </Card>
+          <Card>
+            <CardTitle>Détection</CardTitle>
+            <p className="mb-3 text-sm text-ink-muted">Les intérêts des relevés importés sont détectés automatiquement. Lancez une détection sur vos opérations déjà enregistrées (24 derniers mois).</p>
+            <ActionForm action={detectPurification} submitLabel="Détecter les intérêts" variant="quiet" testId="form-detection" />
+            <Link href="/import" className="mt-3 inline-block text-sm font-medium text-primary-700 underline-offset-4 hover:underline">Importer un relevé CSV</Link>
+          </Card>
+        </div>
+      ) : (
+        <Card className="mt-4">
+          <div data-testid="purification-lecture-seule">
+            <CardTitle>Méthodologie de calcul</CardTitle>
+            <p className="text-sm text-ink-muted">
+              {basis ? <>Choix actuel : <strong data-testid="methodologie-actuelle">{basisLabel[basis]}</strong>.</> : 'Aucune méthodologie choisie : les montants restent « à déterminer ».'}
+            </p>
+            <p className="mt-2 text-sm text-ink-muted">Lecture seule : votre rôle dans ce foyer permet de consulter la purification, pas de détecter, confirmer, écarter ni enregistrer.</p>
+          </div>
         </Card>
-        <Card>
-          <CardTitle>Détection</CardTitle>
-          <p className="mb-3 text-sm text-ink-muted">Les intérêts des relevés importés sont détectés automatiquement. Lancez une détection sur vos opérations déjà enregistrées (24 derniers mois).</p>
-          <ActionForm action={detectPurification} submitLabel="Détecter les intérêts" variant="quiet" testId="form-detection" />
-          <Link href="/import" className="mt-3 inline-block text-sm font-medium text-primary-700 underline-offset-4 hover:underline">Importer un relevé CSV</Link>
-        </Card>
-      </div>
+      )}
 
       <Card className="mt-4">
         <CardTitle>À examiner</CardTitle>
         {by('detected').length === 0 ? <p className="text-ink-muted">{t.empty}</p> : (
           <ul className="divide-y divide-line" data-testid="liste-a-examiner">
             {by('detected').map((v) => (
-              <ItemCard key={v.id} v={v}>
+              <ItemCard key={v.id} v={v} editable={canWrite}>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <ActionForm action={reviewPurification} submitLabel={t.confirm} testId="form-confirmer-purification" className="rounded-lg border border-line p-3">
                     <input type="hidden" name="id" value={v.id} />
@@ -144,7 +159,7 @@ export default async function PurificationPage() {
         {by('confirmed').length === 0 ? <p className="text-ink-muted">Aucun élément confirmé.</p> : (
           <ul className="divide-y divide-line" data-testid="liste-confirmes">
             {by('confirmed').map((v) => (
-              <ItemCard key={v.id} v={v}>
+              <ItemCard key={v.id} v={v} editable={canWrite}>
                 <ActionForm action={reviewPurification} submitLabel="Annuler la confirmation" variant="quiet" className="mt-3">
                   <input type="hidden" name="id" value={v.id} />
                   <input type="hidden" name="decision" value="unconfirm" />
@@ -197,7 +212,7 @@ export default async function PurificationPage() {
           <CardTitle>Écartés</CardTitle>
           <ul className="divide-y divide-line">
             {by('rejected').map((v) => (
-              <ItemCard key={v.id} v={v}>
+              <ItemCard key={v.id} v={v} editable={canWrite}>
                 <ActionForm action={reviewPurification} submitLabel="Remettre à examiner" variant="quiet" className="mt-3">
                   <input type="hidden" name="id" value={v.id} />
                   <input type="hidden" name="decision" value="restore" />
