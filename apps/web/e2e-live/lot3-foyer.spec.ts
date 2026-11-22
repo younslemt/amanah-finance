@@ -113,6 +113,19 @@ test.describe.serial('Lot 3 — foyer à deux membres : engagements personnels e
     await pb.goto('/finance-islamique');
     // Ses montants restent consultables
     expect(await amountOf(pb, 'purification-a-purifier')).toBe(370);
+    // Détail Purification en lecture seule : tout est consultable, aucune écriture proposée
+    await pb.goto('/purification');
+    await expect(pb.getByTestId('purification-lecture-seule')).toBeVisible();
+    // Le choix de méthodologie (ici : aucun) reste affiché, sans formulaire
+    await expect(pb.getByTestId('purification-lecture-seule')).toContainText('Méthodologie de calcul');
+    for (const id of ['form-methodologie', 'form-detection', 'form-confirmer-purification', 'form-ecarter-purification', 'form-purification-realisee']) {
+      await expect(pb.getByTestId(id)).toHaveCount(0);
+    }
+    await expect(pb.getByRole('button', { name: /Annuler la confirmation|Remettre à examiner|Détecter|Enregistrer/ })).toHaveCount(0);
+    // Ses éléments (dont son élément confirmé de 3,70 €) et ceux partagés restent visibles
+    await expect(pb.getByTestId('liste-confirmes').getByTestId('element-purification')).toHaveCount(2);
+    expect(cents(await pb.getByTestId('synthese-purification').getByText(/^À purifier$/).locator('xpath=following-sibling::p[1]').innerText())).toBe(370);
+    await pb.goto('/finance-islamique');
     // Ni bouton « + », ni import dans le menu profil
     await expect(pb.getByTestId('bouton-actions-rapides-ordinateur')).toHaveCount(0);
     await expect(pb.getByTestId('bouton-actions-rapides')).toHaveCount(0);
