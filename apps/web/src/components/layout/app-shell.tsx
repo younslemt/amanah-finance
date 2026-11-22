@@ -43,7 +43,7 @@ export function AppShell({ children, demo, demoDate = null, displayName = null }
   };
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[248px_1fr]">
+    <div className="min-h-dvh md:grid md:grid-cols-[248px_minmax(0,1fr)]">
       <a href="#contenu" className="sr-only z-50 rounded bg-paper px-3 py-2 text-ink focus:not-sr-only focus:fixed focus:left-3 focus:top-3">{fr.nav.skip}</a>
       {/* Navigation latérale (tablette et ordinateur) */}
       <aside className="hidden border-r border-line bg-primary-900 text-ivory md:flex md:flex-col">
