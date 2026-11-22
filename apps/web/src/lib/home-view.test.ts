@@ -4,7 +4,8 @@ import { buildSnapshot } from './snapshot.ts';
 import { getDemoHousehold } from './demo.ts';
 import { initialDemoState, opSetSimulationDate } from './goals/demo-state.ts';
 import { DEMO_CALCS, DEMO_CONTRIBUTIONS, DEMO_USER } from './demo-donations.ts';
-import { buildHomeView, HOME_LIMITS, type HomeViewInput } from './home-view.ts';
+import { buildHomeView, HOME_LIMITS, recommendationGoalId, type HomeViewInput } from './home-view.ts';
+import type { Recommendation } from '@amanah/engines';
 
 /** Entrées de l'accueil à partir des données fictives et des moteurs (même chaîne que l'application). */
 function inputs(opts: { religious: boolean; layout?: unknown; date?: string; records?: boolean }): HomeViewInput {
@@ -49,11 +50,16 @@ describe('accueil Islamic-first : modèle de vue', () => {
     expect(z.view.lines.find((l) => l.kind === 'provision')!.cents).toBe(null);
   });
 
-  it('capacité d’épargne disponible : celle du plan d’épargne (pas le solde)', () => {
+  it('épargne : excédent observé, capacité retenue et part non affectée viennent de leurs moteurs, sans calcul ajouté', () => {
     const inp = inputs({ religious: true });
     const v = buildHomeView(inp);
     const cap = capacityForGoal(inp.snapshot.savingsPlan, '__accueil__');
-    expect(v.situation.capacity).toEqual({ availableCents: cap.availableCents, source: cap.capacitySource });
+    expect(v.situation.capacity).toEqual({ retainedCents: cap.capacityCents, availableCents: cap.availableCents, source: cap.capacitySource });
+    expect(v.situation.observedSurplus).toEqual({
+      cents: inp.snapshot.analysis.capacity.observedCents, months: inp.snapshot.analysis.monthsWithData, sufficient: true,
+    });
+    // Trois montants de natures différentes : la part non affectée est incluse dans la capacité retenue
+    expect(v.situation.capacity.availableCents!).toBeLessThanOrEqual(v.situation.capacity.retainedCents!);
     expect(v.situation.capacity.availableCents).not.toBe(v.situation.balanceCents);
   });
 
@@ -139,5 +145,40 @@ describe('accueil Islamic-first : modèle de vue', () => {
     expect(sum).toBe(v.wealth.totalAssetsCents);
     expect(Object.keys(v.wealth)).not.toContain('score');
     expect(JSON.stringify(v.wealth).toLowerCase()).not.toMatch(/conforme|score|halal|certifi/);
+  });
+
+  it('R7 : une recommandation sur un projet religieux n’est jamais divulguée sans consentement', () => {
+    const inp = inputs({ religious: false });
+    const religiousGoal = inp.snapshot.goals.find((g) => isReligiousGoal(g.goal.kind))!.goal;
+    const plainGoal = inp.snapshot.goals.find((g) => !isReligiousGoal(g.goal.kind))!.goal;
+    const r7 = (goalId: string, name: string, severity: Recommendation['severity']): Recommendation => ({
+      ruleId: 'R7', fingerprint: `R7:${goalId}:test`, severity, subject: goalId, rank: 0,
+      finding: { code: 'goal_late', params: { goalName: name } }, data: [], proposal: { code: 'catch_up_goal', params: {} }, impact: null,
+      action: { code: 'catch_up_goal', href: `/goals/${goalId}#scenarios` },
+    });
+    const injected = [
+      r7(religiousGoal.id, religiousGoal.name, 'critical'),          // projet religieux connu
+      r7('goal-inconnu-hors-accueil', 'Projet masqué', 'critical'),   // projet absent de l'accueil : classification impossible
+      r7(plainGoal.id, plainGoal.name, 'critical'),                    // projet non religieux : conservé
+    ];
+    const v = buildHomeView({ ...inp, snapshot: { ...inp.snapshot, recommendations: injected } });
+    const json = JSON.stringify(v);
+    for (const leak of [religiousGoal.name, religiousGoal.id, `/goals/${religiousGoal.id}`, 'goal-inconnu-hors-accueil', 'Projet masqué']) {
+      expect(json.includes(leak), leak).toBe(false);
+    }
+    const kept = v.actions.filter((a) => a.kind === 'recommendation');
+    expect(kept.map((a) => a.href)).toEqual([`/goals/${plainGoal.id}#scenarios`]);
+    expect(kept[0]!.religious).toBe(false);
+    // Avec consentement : la même recommandation religieuse est présente et classée religieuse
+    const withConsent = buildHomeView({ ...inputs({ religious: true }), snapshot: { ...inp.snapshot, recommendations: [injected[0]!] } });
+    expect(withConsent.actions.find((a) => a.kind === 'recommendation')).toMatchObject({ href: `/goals/${religiousGoal.id}#scenarios`, religious: true });
+  });
+
+  it('projet visé par une recommandation : sujet de R7 ou lien vers une fiche, jamais le nom', () => {
+    expect(recommendationGoalId('R7', 'goal-a', '/goals/goal-a#x')).toBe('goal-a');
+    expect(recommendationGoalId('R2', null, '/goals/goal-b?x=1')).toBe('goal-b');
+    expect(recommendationGoalId('R2', null, '/goals')).toBe(null);
+    expect(recommendationGoalId('R2', null, '/goals/nouveau?modele=x')).toBe(null);
+    expect(recommendationGoalId('R4', 'restaurants', '/budget/optimiser')).toBe(null);
   });
 });

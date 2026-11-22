@@ -45,7 +45,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     await expect(page.getByRole('main').getByRole('alert')).toContainText('Chaque case doit être cochée');
     await completeOnboarding(page, A.name);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(A.name);
-    await expect(page.getByText('Votre espace est prêt')).toBeVisible();
+    await expect(page.getByTestId('accueil-bienvenue')).toBeVisible();
   });
 
   test('5. compte, revenus et dépenses, validation des formulaires', async ({ page }) => {
@@ -134,7 +134,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
     const { sentAt } = await signUpAndConfirm(page, B);
     await page.goto(await latestLink(B.email, 'signup', sentAt));
     await completeOnboarding(page, B.name);
-    await expect(page.getByText('Votre espace est prêt')).toBeVisible();
+    await expect(page.getByTestId('accueil-bienvenue')).toBeVisible();
     await page.goto('/budget');
     await expect(page.getByText('Aucune opération ce mois-ci.')).toBeVisible();
 

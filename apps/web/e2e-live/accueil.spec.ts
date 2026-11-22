@@ -19,6 +19,28 @@ test.describe.serial('Accueil Islamic-first — mode réel', () => {
     const { sentAt } = await signUpAndConfirm(page, U);
     await page.goto(await latestLink(U.email, 'signup', sentAt));
     await completeOnboarding(page, U.name);
+
+    // 0. Premier accueil (aucune donnée) : identité Amanah, démarches réelles, aucun chiffre
+    await page.goto('/dashboard');
+    const welcome = page.getByTestId('accueil-bienvenue');
+    await expect(welcome).toHaveAttribute('data-religious', 'no');
+    await expect(welcome.getByRole('heading', { level: 2, name: 'Bienvenue dans votre espace Amanah' })).toBeVisible();
+    await expect(welcome.getByTestId('premiere-demarche')).toHaveCount(5);
+    for (const href of await welcome.getByTestId('premieres-demarches').getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) {
+      expect((await page.request.get(href!)).status(), href!).toBe(200);
+    }
+    await expect(welcome.getByTestId('finance-islamique-pedagogique')).toBeVisible();
+    await expect(welcome.getByTestId('demarches-engagements')).toHaveCount(0);
+    expect(await welcome.textContent()).not.toMatch(/\d[\d\s\u202f\u00a0]*€/);
+    if (info.project.name === 'desktop') {
+      for (const w of [375, 1440]) {
+        await page.setViewportSize({ width: w, height: w < 768 ? 844 : 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        await page.screenshot({ path: info.outputPath(`accueil-bienvenue-sans-consentement-${w}.jpg`), fullPage: true, type: 'jpeg', quality: 80 });
+      }
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
+
     await page.goto('/comptes');
     await page.getByLabel('Nom du compte').fill('Épargne fictive');
     await page.getByLabel('Type').selectOption('savings');
@@ -88,5 +110,25 @@ test.describe.serial('Accueil Islamic-first — mode réel', () => {
     await expect(home).toHaveAttribute('data-layout', 'classic');
     await expect(page.getByTestId('dashboard-finance-islamique')).toHaveCount(0);
     expect((await page.content()).includes('Montant restant selon vos déclarations')).toBe(false);
+  });
+
+  test('premier accueil avec consentement : accès direct aux fonctions religieuses, sans chiffre', async ({ page }, info) => {
+    const V = fakeUser('b', `accueil-${info.project.name}`);
+    const { sentAt } = await signUpAndConfirm(page, V);
+    await page.goto(await latestLink(V.email, 'signup', sentAt));
+    await completeOnboarding(page, V.name);
+    await activateIslamicFinance(page, '/zakat');
+    await page.goto('/dashboard');
+    const welcome = page.getByTestId('accueil-bienvenue');
+    await expect(welcome).toHaveAttribute('data-religious', 'yes');
+    await expect(welcome.getByRole('heading', { level: 2, name: 'Mes engagements' })).toBeVisible();
+    const links = await welcome.getByTestId('demarches-engagements').getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    expect(links).toEqual(['/zakat', '/purification', '/dons']);
+    for (const href of links) expect((await page.request.get(href!)).status(), href!).toBe(200);
+    expect(await welcome.textContent()).not.toMatch(/\d[\d\s\u202f\u00a0]*€/);
+    if (info.project.name === 'desktop') {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: info.outputPath('accueil-bienvenue-avec-consentement-390.jpg'), fullPage: true, type: 'jpeg', quality: 80 });
+    }
   });
 });

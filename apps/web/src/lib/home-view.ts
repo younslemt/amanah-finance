@@ -66,8 +66,13 @@ export interface HomeView {
   situation: {
     netWorthCents: number; wealthPartial: boolean; balanceCents: number;
     month: string; incomeCents: number; expenseCents: number; netCents: number; savingsRatePermille: number | null;
-    /** Capacité mensuelle encore libre dans le plan d'épargne (null : capacité inconnue). */
-    capacity: { availableCents: number | null; source: 'declared' | 'estimated' | 'unknown' };
+    /**
+     * Plan d'épargne (`capacityForGoal`) : capacité retenue pour le plan et part non affectée
+     * (null : capacité inconnue). Aucun calcul ici.
+     */
+    capacity: { retainedCents: number | null; availableCents: number | null; source: 'declared' | 'estimated' | 'unknown' };
+    /** Analyse des mois complets : excédent mensuel observé (constat, pas une ressource en plus). */
+    observedSurplus: { cents: number | null; months: number; sufficient: boolean };
     /** Catégories budgétées du mois (affichage analytique). */
     budgetLines: Array<{ categorySlug: string; spentCents: number; limitCents: number; status: 'ok' | 'warning' | 'over' | 'no_budget' }>;
   };
@@ -137,6 +142,14 @@ function zakatBlock(s: HouseholdSnapshot, records: ZakatRecords | null): NonNull
     view, basis: 'live', calculationAsOf: null, statusKey: r?.status ?? null,
     observation: reason === 'price_stale' ? 'price_stale' : reason ? 'missing_choices' : 'up_to_date',
   };
+}
+
+/** Projet visé par une recommandation : sujet de R7, ou lien vers la fiche d'un projet. */
+export function recommendationGoalId(ruleId: string, subject: string | null, href: string): string | null {
+  if (ruleId === 'R7' && subject) return subject;
+  const m = /^\/goals\/([^/?#]+)/.exec(href);
+  if (!m || m[1] === 'nouveau' || m[1] === 'calendrier' || m[1] === 'preferences' || m[1] === 'aid') return null;
+  return decodeURIComponent(m[1]!);
 }
 
 export function buildHomeView(input: HomeViewInput): HomeView {
@@ -213,11 +226,21 @@ export function buildHomeView(input: HomeViewInput): HomeView {
     })),
     availableCapacityCents: cap.availableCents ?? 0,
   }, 20);
-  // Recommandations budgétaires (moteur existant) : les urgentes passent avant les opportunités
-  const recos = s.recommendations.filter((r) => r.action).map((r) => ({
-    item: { id: `reco:${r.ruleId}:${r.fingerprint}`, kind: 'recommendation' as const, ruleId: r.ruleId, observation: RULE_TITLE[r.ruleId], cta: ACTION_LABEL[r.action!.code] ?? 'Voir', href: r.action!.href, religious: false },
-    urgent: r.severity === 'critical' || r.severity === 'high',
-  }));
+  // Recommandations budgétaires (moteur existant) : les urgentes passent avant les opportunités.
+  // Une recommandation qui vise un projet (R7, lien /goals/[id]) hérite de la catégorie RÉELLE de ce
+  // projet (type, jamais le nom) ; sans consentement, celles d'un projet religieux ou d'un projet
+  // inconnu de l'accueil sont exclues : ni nom, ni identifiant, ni lien.
+  const goalKind = new Map(s.goals.map(({ goal }) => [goal.id, goal.kind]));
+  const recos = s.recommendations.filter((r) => r.action).flatMap((r) => {
+    const goalId = recommendationGoalId(r.ruleId, r.subject, r.action!.href);
+    const kind = goalId === null ? null : goalKind.get(goalId);
+    const isReligious = goalId !== null && (kind === undefined || isReligiousGoal(kind));
+    if (isReligious && !religious) return [];
+    return [{
+      item: { id: `reco:${r.ruleId}:${r.fingerprint}`, kind: 'recommendation' as const, ruleId: r.ruleId, observation: RULE_TITLE[r.ruleId], cta: ACTION_LABEL[r.action!.code] ?? 'Voir', href: r.action!.href, religious: isReligious },
+      urgent: r.severity === 'critical' || r.severity === 'high',
+    }];
+  });
   const ordered: HomeActionItem[] = [
     ...gateways.filter((a) => a.kind === 'zakat' || a.kind === 'purification' || a.kind === 'late_goal'),
     ...recos.filter((r) => r.urgent).map((r) => r.item),
@@ -232,7 +255,11 @@ export function buildHomeView(input: HomeViewInput): HomeView {
     situation: {
       netWorthCents: s.wealth.netWorthCents, wealthPartial: s.wealth.status === 'partial', balanceCents: s.totalBalanceCents,
       month: s.month.month, incomeCents: s.month.incomeCents, expenseCents: s.month.expenseCents, netCents: s.month.netCents, savingsRatePermille: s.month.savingsRatePermille,
-      capacity: { availableCents: cap.availableCents, source: cap.capacitySource },
+      capacity: { retainedCents: cap.capacityCents, availableCents: cap.availableCents, source: cap.capacitySource },
+      observedSurplus: {
+        cents: s.analysis.reliability === 'insufficient' ? null : s.analysis.capacity.observedCents,
+        months: s.analysis.monthsWithData, sufficient: s.analysis.reliability !== 'insufficient',
+      },
       budgetLines: s.month.categories.filter((c) => c.limitCents !== null).sort((a, b) => b.spentCents - a.spentCents).slice(0, 4)
         .map((c) => ({ categorySlug: c.categorySlug, spentCents: c.spentCents, limitCents: c.limitCents!, status: c.status })),
     },

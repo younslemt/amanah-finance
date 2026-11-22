@@ -17,6 +17,12 @@ L'accueil (`/dashboard`) est refait en six blocs, dans l'ordre de la présentati
 
 **Affichage analytique** (préférence) : mêmes données ; ordre situation, actions, projets, patrimoine, calendrier, engagements (compacts) ; la synthèse financière s'enrichit du budget du mois et du graphique revenus / dépenses.
 
+## Ajustements de la revue finale
+
+- **Recommandations visant un projet (R7, liens `/goals/[id]`)** : elles héritent de la catégorie réelle du projet (son type, jamais son nom). Sans consentement, celles qui visent un projet religieux, ou un projet absent de l'accueil (classification impossible), sont exclues du modèle de vue : ni nom, ni identifiant, ni lien. Test : recommandation R7 religieuse injectée dans un modèle sans consentement.
+- **Épargne** : trois montants de natures différentes, sans aucun calcul ajouté. **Excédent mensuel observé** : constat de l'analyse des mois complets. **Capacité d'épargne retenue pour le plan** : ce que le plan d'épargne répartit entre les projets (déclarée ou estimée). **Capacité d'épargne non affectée** : la part de cette capacité qui n'est encore affectée à aucun projet. Une phrase précise qu'ils ne s'additionnent pas et ne s'ajoutent pas au solde.
+- **Premier accueil** (aucune donnée) : message de bienvenue Amanah, possibilités générales, cinq premières démarches réellement disponibles (compte, saisie, import, projet, patrimoine). Avec consentement : accès direct à la Zakat, à la purification et aux dons. Sans consentement : contenu pédagogique « Finance islamique ». Aucun chiffre affiché. Les parcours d'onboarding sont inchangés.
+
 ## Confidentialité
 
 - Le modèle de vue est construit **côté serveur** (`lib/home-view.ts`, `lib/home-data.ts`). Sans consentement religieux en vigueur, il ne contient aucune donnée religieuse personnalisée : ni engagements, ni projet, événement, suggestion ou action religieux. Les calculs et contributions de Zakat ne sont même pas chargés. Les règles RLS restent la protection de la base.
@@ -25,10 +31,10 @@ L'accueil (`/dashboard`) est refait en six blocs, dans l'ordre de la présentati
 
 ## Tests
 
-- Unitaires : `lib/home-view.test.ts` (9 tests : ordre, données des moteurs, Zakat enregistrée et incomplète, capacité, projets, actions, analytique, absence de divulgation, patrimoine sans score).
+- Unitaires : `lib/home-view.test.ts` (11 tests : ordre, données des moteurs, Zakat enregistrée et incomplète, montants d'épargne, projets, actions, analytique, absence de divulgation, non-divulgation R7, patrimoine sans score).
 - SQL : `supabase/tests/home_layout.test.sql` (12 contrôles : défaut, valeur refusée, isolation dans un même foyer et entre foyers, indépendance du consentement).
 - Démonstration : `e2e/accueil.spec.ts` (ordre des blocs, Zakat, capacité, projets, suggestions et actions vers des écrans existants, analytique, accessibilité, rendu réel à 375, 390, 430, 768 et 1440 px dans les deux affichages, avec captures).
-- Mode réel : `e2e-live/accueil.spec.ts` (sans consentement, préférence persistante, avec consentement et Zakat incomplète, retrait du consentement, captures).
+- Mode réel : `e2e-live/accueil.spec.ts` (premier accueil sans et avec consentement, sans consentement, préférence persistante, avec consentement et Zakat incomplète, retrait du consentement, captures).
 - Tests existants adaptés au nouvel accueil (mêmes vérifications, nouveaux repères).
 
 ## Comparaison avec les maquettes validées
@@ -40,7 +46,7 @@ Captures de l'application exécutée (CI, rendu Chromium réel) comparées aux m
 | Montants différents des maquettes | Voulu : ils viennent des moteurs et des données fictives de démonstration (aucun montant en dur) | — |
 | Pas de ligne « Provision virtuelle » | Aucune provision n'existe encore dans les moteurs : rien n'est inventé | À concevoir avec le plan d'épargne (chantier à valider) |
 | Prochaine étape des projets : « Valider mon plan d'épargne » plutôt que « Comparer les scénarios » | Voulu : l'étape vient du Journey de chaque projet | — |
-| Phrase de synthèse de l'analyse dans « Mon Amanah » | Ajout : conserve l'analyse des mois complets de l'ancien accueil | — |
+| Encadré épargne de « Mon Amanah » : excédent observé, capacité retenue, part non affectée | Ajout demandé à la revue : les trois montants et leur différence sont expliqués | — |
 | Libellé « Liquidités disponibles » au lieu de « Solde » | Libellé existant de l'application | Harmonisation possible au lot 3 |
 | Trois suggestions compactes dans un seul encadré (maquette : une) | Décision antérieure : trois suggestions au plus sur l'accueil | — |
 | Affichage analytique : budget du mois et graphique dans « Mon Amanah » (maquette : bloc séparé) | Même contenu, ordre des blocs respecté | — |

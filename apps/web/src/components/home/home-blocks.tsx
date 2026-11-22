@@ -31,12 +31,11 @@ export function HomeSection({ id, title, href, linkLabel, wide = false, children
 // ---------------------------------------------------------------------------
 // 1. Mon Amanah
 // ---------------------------------------------------------------------------
-export function AmanahHero({ v, synthesis, analytic, categoryName, chart }: {
-  v: HomeView; synthesis: string | null; analytic: boolean; categoryName: (slug: string) => string; chart?: ReactNode;
+export function AmanahHero({ v, analytic, categoryName, chart }: {
+  v: HomeView; analytic: boolean; categoryName: (slug: string) => string; chart?: ReactNode;
 }) {
   const s = v.situation;
   const month = formatMonth(s.month);
-  const cap = s.capacity;
   return (
     <section aria-labelledby="titre-situation" className="pattern-khatam -mx-4 bg-primary-900 px-5 py-6 text-ivory sm:mx-0 sm:rounded-2xl md:px-7 lg:col-span-2" data-testid="ma-situation" data-block="situation">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -51,13 +50,7 @@ export function AmanahHero({ v, synthesis, analytic, categoryName, chart }: {
         <div><dt className="text-xs text-primary-100">{fr.dashboard.income} · <span className="whitespace-nowrap">{month}</span></dt><dd className="tabular mt-0.5 font-semibold sm:text-lg">{formatCents(s.incomeCents, { round: true })}</dd></div>
         <div><dt className="text-xs text-primary-100">{fr.dashboard.expenses} · <span className="whitespace-nowrap">{month}</span></dt><dd className="tabular mt-0.5 font-semibold sm:text-lg">{formatCents(s.expenseCents, { round: true })}</dd></div>
       </dl>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border-l-2 border-accent-500 bg-ivory/10 px-3 py-2" data-testid="capacite-disponible" data-source={cap.source}>
-        <span className="text-xs text-primary-100">Capacité d’épargne encore disponible · plan d’épargne{cap.source === 'estimated' ? ' (estimée)' : ''}</span>
-        {cap.availableCents === null
-          ? <Link href="/budget/plan-epargne" className="text-sm font-semibold text-ivory underline underline-offset-4">Indiquer ma capacité</Link>
-          : <span className="tabular text-sm font-semibold">{formatCents(cap.availableCents, { round: true })} / mois</span>}
-      </div>
-      {synthesis ? <p className="mt-3 text-sm text-primary-100" data-testid="synthese">{synthesis}</p> : null}
+      <SavingsBox v={v} />
       {analytic ? (
         <div className="mt-4 rounded-xl bg-paper p-4 text-ink" data-testid="budget-du-mois">
           <p className="mb-2 text-sm font-semibold text-primary-900">Mon budget de {month}{s.savingsRatePermille !== null ? ` · taux d’épargne ${Math.round(s.savingsRatePermille / 10)} %` : ''}</p>
@@ -79,6 +72,42 @@ export function AmanahHero({ v, synthesis, analytic, categoryName, chart }: {
       ) : null}
       <Link href="/budget" className="mt-4 inline-block text-sm text-ivory underline underline-offset-4">Mon budget du mois →</Link>
     </section>
+  );
+}
+
+/**
+ * Épargne : trois montants de natures différentes, affichés sans aucun calcul supplémentaire.
+ * - excédent mensuel observé : constat sur les mois complets (analyse) ;
+ * - capacité d'épargne retenue pour le plan : ce que le plan d'épargne répartit entre les projets ;
+ * - capacité d'épargne non affectée : la part de cette capacité qui n'est encore affectée à aucun projet.
+ * Ils ne s'additionnent pas : la part non affectée est comprise dans la capacité retenue.
+ */
+function SavingsBox({ v }: { v: HomeView }) {
+  const { capacity: cap, observedSurplus: obs } = v.situation;
+  const perMonth = (c: number) => `${formatCents(c, { round: true })} / mois`;
+  const sourceLabel = cap.source === 'declared' ? 'déclarée par vous' : cap.source === 'estimated' ? 'estimée à partir de vos relevés' : 'non renseignée';
+  return (
+    <div className="mt-4 rounded-md border-l-2 border-accent-500 bg-ivory/10 px-3 py-2.5" data-testid="capacite-disponible" data-source={cap.source}>
+      <dl className="space-y-1.5 text-sm">
+        <div className="flex flex-wrap justify-between gap-x-3" data-testid="excedent-observe">
+          <dt className="text-primary-100">Excédent mensuel observé</dt>
+          <dd className="tabular font-semibold">{obs.sufficient && obs.cents !== null ? (obs.cents >= 0 ? perMonth(obs.cents) : `déficit de ${perMonth(-obs.cents)}`) : 'données insuffisantes'}</dd>
+        </div>
+        <div className="flex flex-wrap justify-between gap-x-3" data-testid="capacite-retenue">
+          <dt className="text-primary-100">Capacité d’épargne retenue pour le plan <span className="text-xs">({sourceLabel})</span></dt>
+          <dd className="tabular font-semibold">{cap.retainedCents === null ? <Link href="/budget/plan-epargne" className="text-ivory underline underline-offset-4">Indiquer ma capacité</Link> : perMonth(cap.retainedCents)}</dd>
+        </div>
+        <div className="flex flex-wrap justify-between gap-x-3" data-testid="capacite-non-affectee">
+          <dt className="text-primary-100">Capacité d’épargne non affectée</dt>
+          <dd className="tabular font-semibold">{cap.availableCents === null ? '—' : perMonth(cap.availableCents)}</dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-xs text-primary-100" data-testid="synthese">
+        {obs.sufficient
+          ? `L’excédent observé est un constat sur vos ${obs.months} derniers mois complets. La capacité retenue est ce que votre plan d’épargne répartit entre vos projets ; la part non affectée en fait partie. Ces montants ne s’additionnent pas et ne s’ajoutent pas à votre solde : ils décrivent ce que vous pouvez épargner par mois.`
+          : `Nous disposons de ${obs.months} mois complet(s) d’opérations : importez au moins 3 mois pour connaître votre excédent observé. La capacité retenue est ce que votre plan d’épargne répartit entre vos projets, par mois.`}
+      </p>
+    </div>
   );
 }
 
@@ -280,4 +309,75 @@ export function WealthBlock({ v }: { v: HomeView }) {
 // ---------------------------------------------------------------------------
 export function NextActionsBlock({ v }: { v: HomeView }) {
   return <HomeActionList actions={v.actions} empty="Rien d’urgent : continuez ainsi." />;
+}
+
+// ---------------------------------------------------------------------------
+// Premier accueil (aucune donnée) : identité Amanah, possibilités, premières démarches
+// ---------------------------------------------------------------------------
+const CAPABILITIES = [
+  { title: 'Budget et analyse', text: 'Revenus, dépenses, plafonds et analyse de vos mois complets.' },
+  { title: 'Projets de vie', text: 'Hajj, études, logement, Aïd : un plan d’épargne pour chaque projet.' },
+  { title: 'Patrimoine', text: 'Comptes, or, placements et biens, réunis en un seul endroit.' },
+  { title: 'Finance islamique', text: 'Zakat, purification et solidarité, avec votre accord explicite.' },
+] as const;
+
+const FIRST_STEPS = [
+  { href: '/comptes', label: 'Ajouter un compte', hint: 'Nom, type et solde de départ' },
+  { href: '/budget', label: 'Saisir revenus et dépenses', hint: 'À la main, opération par opération' },
+  { href: '/import', label: 'Importer un relevé', hint: 'Fichier CSV de votre banque' },
+  { href: '/goals/nouveau', label: 'Créer un projet', hint: 'Catalogue de modèles ou projet libre' },
+  { href: '/wealth', label: 'Renseigner mon patrimoine', hint: 'Or, placements, biens' },
+] as const;
+
+const ENGAGEMENT_STEPS = [
+  { href: '/zakat', label: 'Préparer mon calcul de Zakat', hint: 'Selon vos choix, méthode provisoire' },
+  { href: '/purification', label: 'Suivre la purification', hint: 'Intérêts à examiner' },
+  { href: '/dons', label: 'Enregistrer mes dons', hint: 'Zakat, Sadaqah, waqf' },
+] as const;
+
+function StepList({ steps, testId }: { steps: ReadonlyArray<{ href: string; label: string; hint: string }>; testId: string }) {
+  return (
+    <ol className="grid gap-2 sm:grid-cols-2" data-testid={testId}>
+      {steps.map((st, i) => (
+        <li key={st.href}>
+          <Link href={st.href} className={`${card} flex min-h-11 items-center gap-3 p-3 hover:bg-mist`} data-testid="premiere-demarche">
+            <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-800">{i + 1}</span>
+            <span className="min-w-0">
+              <span className="block font-semibold text-primary-900">{st.label}</span>
+              <span className="block text-xs text-ink-muted">{st.hint}</span>
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Aucune donnée encore : aucun chiffre n'est affiché (rien de fictif présenté comme personnel). */
+export function WelcomeHome({ religious, greeting }: { religious: boolean; greeting: string }) {
+  return (
+    <div className="grid gap-y-7" data-testid="accueil-bienvenue" data-religious={religious ? 'yes' : 'no'}>
+      <section aria-labelledby="titre-bienvenue" className="pattern-khatam -mx-4 bg-primary-900 px-5 py-7 text-ivory sm:mx-0 sm:rounded-2xl md:px-7">
+        <p className="text-sm text-primary-100">{greeting}</p>
+        <h2 id="titre-bienvenue" className="mt-1 text-2xl font-semibold text-ivory">Bienvenue dans votre espace Amanah</h2>
+        <p className="mt-2 max-w-prose text-sm text-primary-100">Une gestion financière et patrimoniale fidèle à vos valeurs : responsabilité, préparation des projets, solidarité. Votre espace est prêt ; il se remplit à partir de vos propres données, jamais de suppositions.</p>
+        <ul className="mt-5 grid gap-3 border-t border-accent-500/50 pt-4 sm:grid-cols-2">
+          {CAPABILITIES.map((c) => (
+            <li key={c.title}>
+              <p className="font-semibold">{c.title}</p>
+              <p className="text-xs text-primary-100">{c.text}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section aria-labelledby="titre-demarches" className="min-w-0">
+        <SectionHeader id="titre-demarches" title="Mes premières démarches" />
+        <StepList steps={FIRST_STEPS} testId="premieres-demarches" />
+      </section>
+      <section aria-labelledby="titre-engagements-bienvenue" className="min-w-0" data-testid="bloc-bienvenue-engagements">
+        <SectionHeader id="titre-engagements-bienvenue" title={religious ? 'Mes engagements' : 'Finance islamique'} href="/finance-islamique" linkLabel={religious ? 'Tout voir' : 'Découvrir'} />
+        {religious ? <StepList steps={ENGAGEMENT_STEPS} testId="demarches-engagements" /> : <IslamicFinanceIntro />}
+      </section>
+    </div>
+  );
 }

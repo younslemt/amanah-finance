@@ -26,7 +26,7 @@ test.describe.serial('Sprint 2 — consentement, import et purification', () => 
     await expect(page.getByRole('checkbox')).toHaveCount(2);
     await expect(page.getByRole('note').filter({ hasText: 'sont facultatives' })).toBeVisible();
     await completeOnboarding(page, C.name);
-    await expect(page.getByText('Votre espace est prêt')).toBeVisible();
+    await expect(page.getByTestId('accueil-bienvenue')).toBeVisible();
     for (const path of ['/purification', '/zakat', '/goals'] as const) {
       await page.goto(path);
       await expect(page.getByTestId('lien-activer-finance-islamique'), path).toBeVisible();

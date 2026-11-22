@@ -41,14 +41,22 @@ test('Zakat : montant restant selon vos déclarations, calcul enregistré et con
   await expect(page.getByTestId('accueil')).not.toContainText('Provision');
 });
 
-test('capacité d’épargne disponible : issue du plan d’épargne, distincte du solde', async ({ page }) => {
+test('épargne : excédent observé, capacité retenue et part non affectée, clairement distingués', async ({ page }) => {
   await page.goto('/dashboard');
-  const cap = page.getByTestId('capacite-disponible');
-  await expect(cap).toContainText('Capacité d’épargne encore disponible · plan d’épargne');
-  await expect(cap).toHaveAttribute('data-source', 'declared');
-  await expect(cap).toContainText(/\d[\d\s\u202f\u00a0]*€\s*\/ mois/);
+  const box = page.getByTestId('capacite-disponible');
+  await expect(box).toHaveAttribute('data-source', 'declared');
+  await expect(box.getByTestId('excedent-observe')).toContainText('Excédent mensuel observé');
+  await expect(box.getByTestId('capacite-retenue')).toContainText('Capacité d’épargne retenue pour le plan');
+  await expect(box.getByTestId('capacite-retenue')).toContainText('déclarée par vous');
+  await expect(box.getByTestId('capacite-non-affectee')).toContainText('Capacité d’épargne non affectée');
+  for (const id of ['excedent-observe', 'capacite-retenue', 'capacite-non-affectee']) {
+    await expect(box.getByTestId(id)).toContainText(/\d[\d\s\u202f\u00a0]*€\s*\/ mois/);
+  }
+  await expect(box.getByTestId('synthese')).toContainText('ne s’additionnent pas');
+  // Même capacité retenue que l'écran du plan d'épargne (moteur de planification)
+  const retained = (await box.getByTestId('capacite-retenue').locator('dd').textContent())!.replace(/\s*\/ mois/, '').trim();
   await page.goto('/budget/plan-epargne');
-  await expect(page.getByTestId('synthese-plan')).toBeVisible();
+  await expect(page.getByTestId('synthese-plan')).toContainText(retained);
 });
 
 test('projets : trois au plus, avancement, objectif, une seule prochaine étape chacun, accès à tous', async ({ page }) => {
