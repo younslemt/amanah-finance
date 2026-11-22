@@ -5,7 +5,7 @@ import { MAX_CHUNKS, decodeDemoState, encodeDemoState, toChunks } from './demo-c
 import {
   demoHistory, initialDemoState, opAddAllocation, opChooseStrategy, opCreateEid, opCreateGoal, opSavePlan, opSetDeclaredCapacity,
   opSetLifecycle, opUpdateEidBudget, opUpdateEidDate, opUpdateGoal, toEngineGoal, type DemoState, type OpResult,
-  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences, opSetSimulationDate,
+  opAddCalendarEvent, opDecideSuggestion, opRemoveCalendarEvent, opSavePlanningPreferences, opSetHomeLayout, opSetSimulationDate,
 } from './demo-state.ts';
 import { fail, ok, type GoalRepository, type RepoResult } from './repository.ts';
 
@@ -53,6 +53,9 @@ async function apply<T>(op: (s: DemoState) => OpResult<T>): Promise<RepoResult<T
   const w = await writeDemoState(r.state);
   return w.ok ? ok(r.value) : w;
 }
+
+/** Préférence d'affichage de l'accueil (démonstration). */
+export const setDemoHomeLayout = (layout: 'islamic_first' | 'classic') => apply((s) => opSetHomeLayout(s, layout));
 
 /** Choisir la date de référence simulée de la démonstration (null : date de départ). */
 export const setDemoSimulationDate = (d: string | null) => apply((s) => opSetSimulationDate(s, d));

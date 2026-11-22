@@ -22,6 +22,8 @@ export interface SessionContext {
   consents: ConsentRecord[];
   /** Consentement article 9 en vigueur : fonctions de finance islamique ouvertes. */
   religiousEnabled: boolean;
+  /** Préférence d'affichage de l'accueil (privée, indépendante du consentement). */
+  homeLayout: string | null;
 }
 
 export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
@@ -33,7 +35,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   const [membership, profile, consents] = await Promise.all([
     supabase.from('household_members').select('household_id, role').eq('user_id', auth.user.id)
       .order('joined_at', { ascending: true }).limit(1).maybeSingle(),
-    supabase.from('profiles').select('display_name, profile_completed_at').eq('id', auth.user.id).maybeSingle(),
+    supabase.from('profiles').select('display_name, profile_completed_at, home_layout').eq('id', auth.user.id).maybeSingle(),
     supabase.from('consents').select('kind, granted, document_version, recorded_at, seq').eq('user_id', auth.user.id),
   ]);
   if (membership.error) throw membership.error;
@@ -50,6 +52,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     profileCompleted: Boolean(profile.data?.profile_completed_at),
     consents: (consents.data ?? []) as ConsentRecord[],
     religiousEnabled: hasReligiousConsent((consents.data ?? []) as ConsentRecord[]),
+    homeLayout: (profile.data?.home_layout as string | null) ?? null,
   };
 });
 

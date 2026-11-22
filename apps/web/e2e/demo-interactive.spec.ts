@@ -110,8 +110,11 @@ test('plusieurs projets créés, suivis de bout en bout, cohérents sur tous les
   // Liste, tableau de bord et plan d'épargne partagent le même état
   await page.goto('/goals');
   for (const n of ['Voyage au Japon', 'Mariage', 'Achat immobilier', 'Hajj en couple']) await expect(page.getByTestId('liste-projets')).toContainText(n);
+  // Accueil : synthèse limitée à 3 projets, total de tous les projets en cours (4 fictifs + 3 créés)
   await page.goto('/dashboard');
-  await expect(page.getByTestId('projets-tableau-de-bord')).toContainText('Voyage au Japon');
+  await expect(page.getByTestId('projets-tableau-de-bord')).toHaveAttribute('data-total', '7');
+  await expect(page.getByTestId('projet-accueil')).toHaveCount(3);
+  await expect(page.getByTestId('tous-les-projets')).toContainText('Tous les projets (7)');
   await page.goto('/budget/plan-epargne');
   await expect(page.getByTestId('lignes-plan')).toContainText('Mariage');
   await expect(page.getByTestId('synthese-plan')).toContainText(euros('700,00 €')); // 150 + 200 + 300 + Aïd fictif 50
@@ -185,6 +188,7 @@ test('plusieurs projets créés, suivis de bout en bout, cohérents sur tous les
   await expect(page.getByTestId('liste-projets')).not.toContainText('Voyage au Japon');
   await expect(page.getByTestId('liste-projets')).toContainText('Hajj en couple');
   await page.goto('/dashboard');
+  await expect(page.getByTestId('projets-tableau-de-bord')).toHaveAttribute('data-total', '4');
   await expect(page.getByTestId('projets-tableau-de-bord')).not.toContainText('Voyage au Japon');
 });
 
@@ -228,8 +232,10 @@ test('données de démonstration illisibles : données de départ rétablies et 
 test('deux onglets : même état de démonstration (un projet créé dans l’un apparaît dans l’autre)', async ({ page, context }) => {
   const other = await context.newPage();
   await other.goto('/dashboard');
-  await expect(other.getByTestId('projets-tableau-de-bord')).toBeVisible();
+  await expect(other.getByTestId('projets-tableau-de-bord')).toHaveAttribute('data-total', '4');
   await addGoal(page, { category: 'Épargne familiale', target: '2 000', monthly: '50' });
   await other.reload();
-  await expect(other.getByTestId('projets-tableau-de-bord')).toContainText('Épargne familiale');
+  await expect(other.getByTestId('projets-tableau-de-bord')).toHaveAttribute('data-total', '5');
+  await other.goto('/goals');
+  await expect(other.getByTestId('liste-projets')).toContainText('Épargne familiale');
 });

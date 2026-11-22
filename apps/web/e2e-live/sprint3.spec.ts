@@ -91,13 +91,21 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await expect(page.getByTestId('resultat-import')).toContainText('50 opération(s) importée(s)');
 
     await page.goto('/dashboard');
-    await expect(page.getByTestId('synthese')).toContainText('Sur vos 6 derniers mois complets');
-    await expect(page.getByTestId('capacite')).toContainText('Estimée');
-    await expect(page.getByRole('img', { name: /Revenus et dépenses sur 6 mois/ })).toBeVisible();
-    const top = page.getByTestId('recommandations-prioritaires').getByTestId('recommandation');
-    await expect(top.first()).toHaveAttribute('data-rule', 'R2'); // réserve : 1 000 € pour ~1 445 € de dépenses essentielles par mois
-    await expect(page.getByTestId('prochaines-actions').getByRole('link').first()).toHaveAttribute('href', '/goals');
+    await expect(page.getByTestId('synthese')).toContainText('constat sur vos 6 derniers mois complets');
+    await expect(page.getByTestId('capacite-disponible')).toBeVisible();
+    // Recommandation urgente (réserve : 1 000 € pour ~1 445 € de dépenses essentielles par mois) parmi les prochaines actions
+    const reserve = page.getByTestId('prochaines-actions').locator('[data-testid="prochaine-action"][data-rule="R2"]');
+    await expect(reserve).toBeVisible();
+    await expect(reserve.getByRole('link')).toHaveAttribute('href', '/goals');
     await expect(page.getByTestId('dashboard-finance-islamique')).toHaveCount(0);
+    // Analyse complète conservée dans l'affichage analytique (préférence privée enregistrée en base)
+    await page.getByTestId('form-affichage').getByRole('button').click();
+    await expect(page.getByTestId('accueil')).toHaveAttribute('data-layout', 'classic');
+    await expect(page.getByRole('img', { name: /Revenus et dépenses sur 6 mois/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('accueil')).toHaveAttribute('data-layout', 'classic');
+    await page.getByTestId('form-affichage').getByRole('button').click();
+    await expect(page.getByTestId('accueil')).toHaveAttribute('data-layout', 'islamic_first');
 
     await page.goto('/budget');
     const rec = page.getByTestId('liste-recurrentes');

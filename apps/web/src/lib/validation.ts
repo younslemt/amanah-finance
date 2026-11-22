@@ -399,6 +399,11 @@ export const schoolDateResetSchema = z.object({
 });
 
 /** Démonstration : date de référence simulée (vide : date de départ). */
+/** Préférence d'affichage de l'accueil (présentation seulement). */
+export const homeLayoutSchema = z.object({
+  layout: z.enum(['islamic_first', 'classic'], { message: 'Affichage inconnu.' }),
+});
+
 export const simulationDateSchema = z.object({
   date: z.string().trim().optional().transform((v) => v || null).pipe(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide.').nullable()),
 });
