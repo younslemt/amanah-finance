@@ -151,14 +151,22 @@ for (const s of [
 }
 
 // Sprint 3 : tableau de bord, simulation et recommandations en démonstration
-test('le tableau de bord présente situation, évolution, capacité, recommandations, projets et actions', async ({ page }) => {
+test('le tableau de bord présente situation, engagements, projets, calendrier, patrimoine et actions', async ({ page }) => {
   await page.goto('/dashboard');
   await expect(page.getByTestId('ma-situation')).toContainText('Ma situation financière');
   await expect(page.getByTestId('synthese')).toContainText('par mois');
-  await expect(page.getByRole('img', { name: /Revenus et dépenses sur 3 mois/ })).toBeVisible();
-  await expect(page.getByTestId('capacite')).toContainText('Estimée');
-  await expect(page.getByTestId('recommandations-prioritaires').getByTestId('recommandation').first()).toBeVisible();
+  await expect(page.getByTestId('capacite-disponible')).toContainText('/ mois');
+  await expect(page.getByTestId('dashboard-finance-islamique')).toBeVisible();
+  await expect(page.getByTestId('projet-accueil').first()).toBeVisible();
+  await expect(page.getByTestId('echeance-accueil').first()).toBeVisible();
+  await expect(page.getByTestId('patrimoine-accueil')).toBeVisible();
   await expect(page.getByTestId('prochaines-actions').getByRole('link').first()).toBeVisible();
+  // Évolution des revenus et dépenses : affichage analytique (même données)
+  await page.getByTestId('form-affichage').getByRole('button').click();
+  await expect(page.getByTestId('accueil')).toHaveAttribute('data-layout', 'classic');
+  await expect(page.getByRole('img', { name: /Revenus et dépenses sur 3 mois/ })).toBeVisible();
+  await page.getByTestId('form-affichage').getByRole('button').click();
+  await expect(page.getByTestId('accueil')).toHaveAttribute('data-layout', 'islamic_first');
 });
 
 test('la simulation calcule sans rien enregistrer en démonstration', async ({ page }) => {

@@ -64,6 +64,8 @@ const planningSchema = z.object({
   }).refine((e) => !e.religious || e.visibility === 'private')).max(DEMO_LIMITS.events),
   /** Date de référence simulée (null : DEMO_AS_OF, tests déterministes). */
   simulationDate: date.nullable().default(null),
+  /** Préférence d'affichage de l'accueil (états antérieurs : Islamic-first). */
+  homeLayout: z.enum(['islamic_first', 'classic']).default('islamic_first'),
 });
 
 const allocationSchema = z.object({
@@ -130,6 +132,7 @@ export function initialPlanning(): DemoState['planning'] {
     decisions: [],
     events: [{ id: 'evt-assurance', label: 'Assurance habitation (fictive)', date: '2027-03-15', yearly: true, visibility: 'household', religious: false }],
     simulationDate: null,
+    homeLayout: 'islamic_first',
   };
 }
 
@@ -421,4 +424,9 @@ export function opSetSimulationDate(s: DemoState, d: string | null): OpResult {
     return err(`Choisissez une date entre le ${DEMO_AS_OF} et le ${SIMULATION_MAX}.`);
   }
   return done({ ...s, planning: { ...s.planning, simulationDate: d === DEMO_AS_OF ? null : d } }, undefined);
+}
+
+/** Préférence d'affichage de l'accueil (démonstration) : ne change que l'ordre et la présentation. */
+export function opSetHomeLayout(s: DemoState, layout: 'islamic_first' | 'classic'): OpResult {
+  return done({ ...s, planning: { ...s.planning, homeLayout: layout } }, undefined);
 }

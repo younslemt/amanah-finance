@@ -53,7 +53,7 @@ test('page Projets : en cours, suggérés, créer ; une suggestion acceptée dev
   await page.goto('/budget/plan-epargne');
   await expect(page.getByTestId('lignes-plan')).toContainText('Rentrée de Yasmine 2027');
   await page.goto('/dashboard');
-  await expect(page.getByTestId('projets-tableau-de-bord')).toContainText('Rentrée de Yasmine 2027');
+  await expect(page.getByTestId('projets-tableau-de-bord')).toHaveAttribute('data-total', '5');
   await expect(page.getByTestId('suggestion-accueil')).toHaveCount(3);
   await expect(page.getByTestId('suggestions-accueil')).not.toContainText('Rentrée scolaire 2027');
 });

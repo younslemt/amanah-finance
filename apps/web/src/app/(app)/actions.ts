@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { writeGoalRepository, type GoalRepository } from '@/lib/goals';
-import { resetDemoState, setDemoSimulationDate } from '@/lib/goals/demo-repository';
+import { resetDemoState, setDemoHomeLayout, setDemoSimulationDate } from '@/lib/goals/demo-repository';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession, type SessionContext } from '@/lib/supabase/session';
 import { formError, formOk, type FormState } from '@/lib/form-state';
@@ -11,7 +11,7 @@ import {
   accountSchema, allocationSchema, budgetSchema, categorySchema, customCategorySlug, fieldErrorsOf,
   declaredCapacitySchema, formDataToObject, goalLifecycleSchema, goalSchema, goalUpdateSchema, idSchema, savingsPlanSchema, strategySchema, transactionSchema,
   calendarEventIdSchema, calendarEventSchema, planningPreferencesSchema, religiousDateConfirmationSchema, suggestionDecisionSchema,
-  schoolDateOverrideSchema, schoolDateResetSchema, simulationDateSchema,
+  schoolDateOverrideSchema, schoolDateResetSchema, simulationDateSchema, homeLayoutSchema,
 } from '@/lib/validation';
 
 /**
@@ -227,6 +227,26 @@ export async function setSimulationDate(_p: FormState, fd: FormData): Promise<Fo
   const r = await setDemoSimulationDate(parsed.data.date);
   if (!r.ok) return fromRepo(r);
   return done(parsed.data.date ? `Démonstration simulée au ${parsed.data.date} : échéances, suggestions et budget recalculés.` : 'Date de départ de la démonstration rétablie.');
+}
+
+/**
+ * Préférence d'affichage de l'accueil : Islamic-first ou analytique. Privée (colonne de son propre
+ * profil, RLS existantes) et indépendante du consentement : elle ne donne accès à aucune donnée.
+ * Tout membre, même en lecture seule, choisit sa propre présentation.
+ */
+export async function setHomeLayout(_p: FormState, fd: FormData): Promise<FormState> {
+  const parsed = homeLayoutSchema.safeParse(formDataToObject(fd));
+  if (!parsed.success) return formError('Affichage inconnu.');
+  const label = parsed.data.layout === 'classic' ? 'Affichage analytique' : 'Affichage Islamic-first';
+  if (isDemoMode) {
+    const r = await setDemoHomeLayout(parsed.data.layout);
+    if (!r.ok) return fromRepo(r);
+    return done(`${label} enregistré.`);
+  }
+  const ctx = await requireOnboardedSession();
+  const { error } = await ctx.supabase.from('profiles').update({ home_layout: parsed.data.layout }).eq('id', ctx.userId);
+  if (error) return formError('Préférence non enregistrée. Réessayez.');
+  return done(`${label} enregistré.`);
 }
 
 // --- Sprint 3 : choix du foyer pour l'analyse ------------------------------------
