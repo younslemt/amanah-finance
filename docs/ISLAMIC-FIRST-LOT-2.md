@@ -30,3 +30,21 @@ L'accueil (`/dashboard`) est refait en six blocs, dans l'ordre de la présentati
 - Démonstration : `e2e/accueil.spec.ts` (ordre des blocs, Zakat, capacité, projets, suggestions et actions vers des écrans existants, analytique, accessibilité, rendu réel à 375, 390, 430, 768 et 1440 px dans les deux affichages, avec captures).
 - Mode réel : `e2e-live/accueil.spec.ts` (sans consentement, préférence persistante, avec consentement et Zakat incomplète, retrait du consentement, captures).
 - Tests existants adaptés au nouvel accueil (mêmes vérifications, nouveaux repères).
+
+## Comparaison avec les maquettes validées
+
+Captures de l'application exécutée (CI, rendu Chromium réel) comparées aux maquettes, à 375, 390, 430, 768 et 1440 px, dans les deux affichages, sans consentement et avec une Zakat incomplète.
+
+| Écart | Nature | Suite |
+|---|---|---|
+| Montants différents des maquettes | Voulu : ils viennent des moteurs et des données fictives de démonstration (aucun montant en dur) | — |
+| Pas de ligne « Provision virtuelle » | Aucune provision n'existe encore dans les moteurs : rien n'est inventé | À concevoir avec le plan d'épargne (chantier à valider) |
+| Prochaine étape des projets : « Valider mon plan d'épargne » plutôt que « Comparer les scénarios » | Voulu : l'étape vient du Journey de chaque projet | — |
+| Phrase de synthèse de l'analyse dans « Mon Amanah » | Ajout : conserve l'analyse des mois complets de l'ancien accueil | — |
+| Libellé « Liquidités disponibles » au lieu de « Solde » | Libellé existant de l'application | Harmonisation possible au lot 3 |
+| Trois suggestions compactes dans un seul encadré (maquette : une) | Décision antérieure : trois suggestions au plus sur l'accueil | — |
+| Affichage analytique : budget du mois et graphique dans « Mon Amanah » (maquette : bloc séparé) | Même contenu, ordre des blocs respecté | — |
+| Carte Zakat de l'accueil : estimé, déclaré et rapproché ; « confirmées » seulement dans le détail | Accueil compact ; les cinq notions restent séparées dans le modèle | Écran « Mes engagements » complet au lot 3 |
+| Navigation : entrée « Finance islamique » et pas de bouton « + » | Hors lot 2 | Lot 3 (navigation, « Mes engagements », actions rapides) |
+| En-tête mobile du mode réel chargé à 375 px (Comptes, Paramètres, Se déconnecter) | Coque existante | Lot 3 (menu profil) |
+| Barre de navigation basse visible au milieu des captures pleine page | Artefact de capture pleine page (élément fixe), pas un défaut d'affichage | — |
