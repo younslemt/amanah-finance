@@ -53,10 +53,13 @@ test('épargne : excédent observé, capacité retenue et part non affectée, cl
     await expect(box.getByTestId(id)).toContainText(/\d[\d\s\u202f\u00a0]*€\s*\/ mois/);
   }
   await expect(box.getByTestId('synthese')).toContainText('ne s’additionnent pas');
-  // Même capacité retenue que l'écran du plan d'épargne (moteur de planification)
-  const retained = (await box.getByTestId('capacite-retenue').locator('dd').textContent())!.replace(/\s*\/ mois/, '').trim();
+  // Même capacité retenue que l'écran du plan d'épargne (moteur de planification ; l'accueil arrondit à l'euro)
+  const digits = (t: string) => t.replace(/[^\d]/g, '');
+  const retained = digits((await box.getByTestId('capacite-retenue').locator('dd').textContent())!.split('/')[0]!);
   await page.goto('/budget/plan-epargne');
-  await expect(page.getByTestId('synthese-plan')).toContainText(retained);
+  const plan = (await page.getByTestId('synthese-plan').textContent())!.match(/mensuelle\s*([\d\s\u202f\u00a0]+),\d\d/);
+  expect(plan).not.toBeNull();
+  expect(digits(plan![1]!)).toBe(retained);
 });
 
 test('projets : trois au plus, avancement, objectif, une seule prochaine étape chacun, accès à tous', async ({ page }) => {

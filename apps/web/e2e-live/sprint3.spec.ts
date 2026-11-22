@@ -91,7 +91,7 @@ test.describe.serial('Sprint 3 — analyse, optimisation, recommandations', () =
     await expect(page.getByTestId('resultat-import')).toContainText('50 opération(s) importée(s)');
 
     await page.goto('/dashboard');
-    await expect(page.getByTestId('synthese')).toContainText('Sur vos 6 derniers mois complets');
+    await expect(page.getByTestId('synthese')).toContainText('constat sur vos 6 derniers mois complets');
     await expect(page.getByTestId('capacite-disponible')).toBeVisible();
     // Recommandation urgente (réserve : 1 000 € pour ~1 445 € de dépenses essentielles par mois) parmi les prochaines actions
     const reserve = page.getByTestId('prochaines-actions').locator('[data-testid="prochaine-action"][data-rule="R2"]');
