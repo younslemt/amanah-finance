@@ -114,3 +114,23 @@ proposée sur le premier accueil (compte sans données). Authentification et aut
   apparaissent), consentement, Zakat incomplète puis calcul enregistré et dons, cohérence des montants,
   historique, retrait.
 - Non-régression : écrans existants (`screens.spec.ts`, `smoke.spec.ts`), déconnexion via le menu profil.
+
+## 7. Comparaison avec les maquettes validées
+
+Captures de l'application réellement exécutée (CI, démonstration et mode réel), comparées aux
+maquettes « Engagements », « Actions rapides » et « Ordinateur ».
+
+| Élément | Maquette | Application | Raison |
+|---|---|---|---|
+| Ordre de la navigation | Accueil · Mes engagements · Projets · Budget · Patrimoine | identique | — |
+| Sous-entrées ordinateur | Zakat, Purification, Solidarité | identiques (avec consentement) | — |
+| Provision virtuelle | 600 € affichés | ligne masquée | aucune source de provision dans le modèle ; jamais inventée |
+| Purification | cases à cocher et « Confirmer et purifier 12,40 € » sur la page | synthèse + « Confirmer les montants à purifier » vers `/purification` | les décisions passent par le parcours existant (méthodologie, brut/net) ; aucun calcul dupliqué ; libellé validé au lot 1 |
+| Solidarité | total et dernier don | total, ventilation par type, statuts, dernier don | exigence « distinction déclaration / rapprochement / confirmation » et « aucun double comptage » |
+| Avatar | dans le bandeau de l'accueil | dans l'en-tête de chaque page (smartphone) et la colonne latérale (ordinateur) | menu profil accessible partout |
+| Bouton « + » sur ordinateur | non représenté | « Actions rapides » dans la colonne latérale | même panneau, accessible au clavier |
+| En-tête de la page | bandeau vert, lien « ← Accueil » | titre standard des pages | cohérence avec les autres écrans ; la navigation indique la page courante |
+| Montants | montants d'exemple de la maquette | montants des moteurs (démonstration fictive ou données réelles) | aucun montant codé en dur |
+
+Écarts restant ouverts : aucune provision virtuelle tant qu'un moteur ou une saisie ne l'alimente pas ;
+historique des calculs de Zakat non disponible en démonstration (rien n'y est enregistré).
