@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { AUDIT_ROUTES, inventory, type ScreenInventory } from '../e2e/audit-inventaire';
-import { activateIslamicFinance, completeOnboarding, createGoalWithWizard, fakeUser, latestLink, signIn, signUpAndConfirm } from './helpers';
+import { activateIslamicFinance, completeOnboarding, createGoalWithWizard, fakeUser, latestLink, signUpAndConfirm } from './helpers';
 
 /**
  * Audit fonctionnel (mode réel) : inventaire de chaque écran pour un propriétaire du foyer, puis pour
@@ -55,7 +55,7 @@ test.describe.serial('Audit — inventaire des écrans en mode réel', () => {
     const hid = sql(`select household_id from public.household_members where user_id = '${o}'`);
     sql(`delete from public.households where created_by = '${v}';
          insert into public.household_members (household_id, user_id, role) values ('${hid}', '${v}', 'viewer');`);
-    await signIn(page, V);
+    // Session de V toujours ouverte : le foyer et le rôle sont relus à chaque requête
     const out: ScreenInventory[] = [];
     for (const route of [...AUDIT_ROUTES, goalPath, `${goalPath}/solutions`]) {
       const inv = await inventory(page, route);
