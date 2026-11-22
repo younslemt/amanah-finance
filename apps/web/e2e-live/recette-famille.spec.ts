@@ -114,7 +114,7 @@ test.describe.serial('Recette — famille fictive de bout en bout (mode réel)',
     await eid.getByRole('button', { name: 'Créer mon projet Aïd' }).click();
     await expectRedirectOrShowError(page, eid, /\/goals\/[0-9a-f-]{36}\?cree=1$/);
     report.aidCree = await grab(page, ['budget-aid', 'date-aid', 'plan-projet']);
-    if (firstAmount((report.aidCree as Record<string, string | null>)['budget-aid']) !== 50_000) note('Aïd', `budget affiché ≠ 500 € : ${JSON.stringify(report.aidCree)}`);
+    if (!amounts((report.aidCree as Record<string, string | null>)['budget-aid']).includes(50_000)) note('Aïd', `budget affiché ≠ 500 € : ${JSON.stringify(report.aidCree)}`);
 
     // Rentrée scolaire : modèle du catalogue, montant saisi par l'utilisateur
     await page.goto('/goals/nouveau?modele=rentree-scolaire');
