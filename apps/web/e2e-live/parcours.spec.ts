@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
-  activateIslamicFinance, apiToken, createGoalWithWizard, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, signUpAndConfirm, visibleButton,
+  activateIslamicFinance, apiToken, createGoalWithWizard, completeOnboarding, euros, fakeUser, latestLink, rest, signIn, openProfileMenu, signUpAndConfirm, visibleButton,
 } from './helpers';
 
 /**
@@ -116,6 +116,7 @@ test.describe.serial('Sprint 1 — parcours réel', () => {
   test('8-9. déconnexion, accès refusé, reconnexion et données retrouvées', async ({ page }) => {
     await signIn(page, A);
     await expect(page).toHaveURL(/\/dashboard/);
+    await openProfileMenu(page);
     await visibleButton(page, 'Se déconnecter').click();
     await expect(page).toHaveURL(/\/connexion/);
     await page.goto('/budget');

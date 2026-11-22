@@ -91,9 +91,13 @@ export function purificationViews(rows: readonly PurificationRow[], basis: Purif
   });
 }
 
-export function purificationSummary(rows: readonly PurificationRow[]): PurificationSummary {
-  const items: PurificationItem[] = rows.map((r) => ({
+/** Lignes de la base → éléments du moteur de purification. */
+export function purificationItems(rows: readonly PurificationRow[]): PurificationItem[] {
+  return rows.map((r) => ({
     id: r.id, creditedCents: Number(r.credited_cents), amountToPurifyCents: n(r.amount_to_purify_cents), status: r.status,
   }));
-  return summarizePurification(items);
+}
+
+export function purificationSummary(rows: readonly PurificationRow[]): PurificationSummary {
+  return summarizePurification(purificationItems(rows));
 }
