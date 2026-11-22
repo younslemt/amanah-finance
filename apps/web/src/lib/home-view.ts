@@ -233,7 +233,8 @@ export function buildHomeView(input: HomeViewInput): HomeView {
   const goalKind = new Map(s.goals.map(({ goal }) => [goal.id, goal.kind]));
   const recos = s.recommendations.filter((r) => r.action).flatMap((r) => {
     const goalId = recommendationGoalId(r.ruleId, r.subject, r.action!.href);
-    const kind = goalId === null ? null : goalKind.get(goalId);
+    // Projet inconnu de l'accueil : classification impossible, traité comme religieux par prudence
+    const kind = goalId === null ? undefined : goalKind.get(goalId);
     const isReligious = goalId !== null && (kind === undefined || isReligiousGoal(kind));
     if (isReligious && !religious) return [];
     return [{
