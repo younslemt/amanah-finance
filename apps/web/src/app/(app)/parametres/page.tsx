@@ -37,6 +37,7 @@ export default async function SettingsPage() {
         </ActionForm>
       </Card>
 
+      <div id="consentements" className="scroll-mt-6">
       <Card className="mt-4">
         <CardTitle>Consentements</CardTitle>
         <ul className="divide-y divide-line">
@@ -62,6 +63,7 @@ export default async function SettingsPage() {
         </ul>
         <p className="mt-3 text-xs text-ink-muted">Le retrait des conditions d’utilisation suspend l’accès à l’application jusqu’à une nouvelle acceptation. L’historique de vos choix est conservé comme preuve.</p>
       </Card>
+      </div>
 
       <Card className="mt-4">
         <CardTitle>Finance islamique</CardTitle>

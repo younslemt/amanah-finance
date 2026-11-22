@@ -16,7 +16,7 @@ test.describe('Sprint 0 — parcours de démonstration', () => {
       ['Budget', '/budget', 'Budget'],
       ['Projets', '/goals', 'Projets de vie'],
       ['Patrimoine', '/wealth', 'Patrimoine'],
-      ['Finance islamique', '/finance-islamique', 'Finance islamique'],
+      ['Mes engagements', '/finance-islamique', 'Mes engagements'],
     ] as const) {
       await nav.getByRole('link', { name: label }).click();
       await expect(page).toHaveURL(new RegExp(`${path}$`));

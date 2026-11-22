@@ -248,6 +248,7 @@ function Wealth({ page }: { page: Awaited<ReturnType<typeof loadZakatPage>> }) {
 
 function History({ entries }: { entries: HistoryEntry[] }) {
   return (
+    <div id="historique" className="scroll-mt-6">
     <Card className="mt-4">
       <CardTitle>Historique de mes calculs</CardTitle>
       {entries.length === 0 ? <p className="text-sm text-ink-muted">Aucun calcul enregistré.</p> : (
@@ -280,6 +281,7 @@ function History({ entries }: { entries: HistoryEntry[] }) {
         </ul>
       )}
     </Card>
+    </div>
   );
 }
 

@@ -12,7 +12,7 @@ export function ConsentGate({ religiousEnabled, children, fallback }: { religiou
 }
 
 /** Contenu pédagogique de la rubrique « Finance islamique » (aucune donnée personnelle). */
-export function IslamicFinanceIntro({ activateHref = '/finance-islamique' }: { activateHref?: string }) {
+export function IslamicFinanceIntro({ activateHref = '/finance-islamique' }: { activateHref?: string | null }) {
   const topics = [
     { title: 'La Zakat', text: 'Nisab, hawl et biens concernés.' },
     { title: 'La purification', text: 'Intérêts et revenus à purifier.' },
@@ -28,11 +28,11 @@ export function IslamicFinanceIntro({ activateHref = '/finance-islamique' }: { a
           </li>
         ))}
       </ul>
-      <div className="rounded-xl border border-dashed border-accent-600 bg-paper p-4 text-sm">
+      {activateHref === null ? null : <div className="rounded-xl border border-dashed border-accent-600 bg-paper p-4 text-sm">
         <p className="font-semibold">Suivre mes propres engagements ?</p>
         <p className="mt-1 text-ink-muted">Ces informations révèlent des convictions religieuses : elles ne sont enregistrées qu’avec votre accord explicite, retirable à tout moment.</p>
         <Link href={activateHref} className="mt-3 inline-block rounded-lg bg-primary-700 px-4 py-3 font-semibold text-white">Activer mes engagements</Link>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -21,11 +21,12 @@ const SCREENS = [
   { path: '/goals/preferences', heading: 'Préférences des suggestions', nav: 'Projets' },
   { path: '/goals/nouveau?mode=modele', heading: 'Ajouter un objectif', nav: 'Projets' },
   { path: '/wealth', heading: 'Patrimoine', nav: 'Patrimoine' },
-  { path: '/finance-islamique', heading: 'Finance islamique', nav: 'Finance islamique' },
-  { path: '/zakat', heading: 'Zakat', nav: 'Finance islamique' },
-  { path: '/purification', heading: 'Purification', nav: 'Finance islamique' },
-  { path: '/dons', heading: 'Dons et Sadaqah', nav: 'Finance islamique' },
-  { path: '/zakat/al-fitr', heading: 'Zakat al-Fitr', nav: 'Finance islamique' },
+  { path: '/finance-islamique', heading: 'Mes engagements', nav: 'Mes engagements' },
+  // Ordinateur : la sous-entrée est la page courante ; smartphone : l'entrée « Mes engagements »
+  { path: '/zakat', heading: 'Zakat', nav: 'Mes engagements', sub: 'Zakat' },
+  { path: '/purification', heading: 'Purification', nav: 'Mes engagements', sub: 'Purification' },
+  { path: '/dons', heading: 'Dons et Sadaqah', nav: 'Mes engagements', sub: 'Solidarité' },
+  { path: '/zakat/al-fitr', heading: 'Zakat al-Fitr', nav: 'Mes engagements', sub: 'Zakat' },
 ] as const;
 
 function visibleNav(page: Page, isMobile: boolean) {
@@ -68,7 +69,8 @@ for (const s of SCREENS) {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(s.heading);
     const nav = visibleNav(page, isMobile);
     await expect(nav).toBeVisible();
-    await expect(nav.getByRole('link', { name: s.nav })).toHaveAttribute('aria-current', 'page');
+    const current = !isMobile && 'sub' in s ? s.sub : s.nav;
+    await expect(nav.getByRole('link', { name: current, exact: true })).toHaveAttribute('aria-current', 'page');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, 'défilement horizontal').toBeLessThanOrEqual(0);
     expect(await contrastFailures(page)).toEqual([]);

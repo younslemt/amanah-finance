@@ -44,5 +44,9 @@ export function availableQuickActions(ctx: QuickActionContext): QuickAction[] {
     if (r.needsActiveGoal && !ctx.hasActiveGoal) return false;
     if (r.needsConsent && !ctx.religiousEnabled) return false;
     return true;
-  }).map(({ id, label, hint, href, religious }) => ({ id, label, hint, href, religious }));
+  }).map(({ id, label, hint, href, religious }) => ({
+    id, label, href, religious,
+    // L'échéance religieuse n'est proposée qu'avec le consentement (écran du calendrier)
+    hint: id === 'add_calendar_event' && ctx.religiousEnabled ? 'Personnelle, familiale ou religieuse' : hint,
+  }));
 }

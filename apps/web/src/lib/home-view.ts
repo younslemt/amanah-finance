@@ -115,7 +115,13 @@ const GROUP_LABEL: Record<WealthGroup['key'], string> = {
 const PRICE_REASONS = new Set(['nisab_price_unavailable', 'valuation_price_unavailable']);
 const num = (v: number | string) => (typeof v === 'string' ? Number(v) : v);
 
-function zakatBlock(s: HouseholdSnapshot, records: ZakatRecords | null): NonNullable<HomeView['commitments']>['zakat'] & { observation: ZakatObservation } {
+export type ZakatCommitment = NonNullable<HomeView['commitments']>['zakat'] & { observation: ZakatObservation };
+
+/**
+ * Statut Zakat de la personne : dernier calcul enregistré et ses contributions, sinon calcul courant.
+ * Partagé par l'accueil et la page Mes engagements (une seule source, aucun calcul en double).
+ */
+export function zakatCommitment(s: HouseholdSnapshot, records: ZakatRecords | null): ZakatCommitment {
   const mine = (records?.calculations ?? []).filter((c) => c.owner_id === records!.userId)
     .slice().sort((a, b) => (a.as_of < b.as_of ? 1 : a.as_of > b.as_of ? -1 : 0))[0];
   if (mine) {
@@ -181,7 +187,7 @@ export function buildHomeView(input: HomeViewInput): HomeView {
   let commitments: HomeView['commitments'] = null;
   let zakatObservation: ZakatObservation | null = null;
   if (religious) {
-    const z = zakatBlock(s, input.zakatRecords);
+    const z = zakatCommitment(s, input.zakatRecords);
     zakatObservation = z.observation;
     const year = Number(s.asOf.slice(0, 4));
     const solidarity = (input.zakatRecords?.contributions ?? [])

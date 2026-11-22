@@ -63,7 +63,11 @@ export default async function PurificationPage() {
 
   const { rows, basis, gifts } = await loadPurification(ctx);
   const views = purificationViews(rows, basis, ctx.userId);
-  const summary = purificationSummary(rows);
+  // Synthèse personnelle (comme « Mes engagements ») ; les éléments partagés par d'autres membres
+  // restent listés et signalés, sans être comptés dans vos totaux
+  const ownRows = rows.filter((r) => r.owner_id === ctx.userId);
+  const summary = purificationSummary(ownRows);
+  const sharedCount = rows.length - ownRows.length;
   const by = (st: PurificationView['status']) => views.filter((v) => v.status === st);
   const payable = by('confirmed').filter((v) => v.mine && v.amountToPurifyCents !== null);
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
@@ -83,6 +87,11 @@ export default async function PurificationPage() {
         <Card><Stat label="Purifié" value={formatCents(summary.purifiedCents)} tone="positive" /></Card>
         <Card><Stat label="Écarté (net)" value={formatCents(summary.rejectedCreditedCents)} /></Card>
       </div>
+      <p className="mt-2 text-xs text-ink-muted" data-testid="purification-perimetre-detail" data-shared={sharedCount}>
+        Totaux calculés sur vos éléments uniquement.{sharedCount > 0
+          ? ` ${sharedCount === 1 ? '1 élément partagé' : `${sharedCount} éléments partagés`} par un membre du foyer figure(nt) dans les listes ci-dessous, sans être compté(s) dans ces totaux.`
+          : ''}
+      </p>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Card>

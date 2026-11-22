@@ -52,6 +52,13 @@ export function visibleButton(page: Page, name: string | RegExp) {
   return page.getByRole('button', { name }).filter({ visible: true }).first();
 }
 
+/** Lot 3 : les accès secondaires (comptes, paramètres, déconnexion…) sont dans le menu profil. */
+export async function openProfileMenu(page: Page) {
+  const button = page.getByTestId('bouton-profil').filter({ visible: true }).first();
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  return page.getByTestId('panneau-profil').filter({ visible: true }).first();
+}
+
 export async function signUpAndConfirm(page: Page, user: { email: string; password: string }) {
   await page.goto('/inscription');
   await page.getByLabel('Adresse e-mail').fill(user.email);

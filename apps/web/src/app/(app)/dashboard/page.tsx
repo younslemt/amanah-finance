@@ -8,6 +8,8 @@ import { RECOMMENDATION_NOTICE } from '@/lib/recommendation-text';
 import { categoryLabel } from '@/lib/labels';
 import { fr } from '@/messages/fr';
 import { loadHomeView } from '@/lib/home-data';
+import { isDemoMode } from '@/lib/env';
+import { requireOnboardedSession } from '@/lib/supabase/session';
 import type { HomeBlockId } from '@/lib/presentation';
 import {
   AmanahHero, CalendarBlock, CommitmentsBlock, HomeSection, NextActionsBlock, ProjectsBlock, WealthBlock, WelcomeHome,
@@ -25,6 +27,19 @@ export default async function DashboardPage() {
   const [{ view: v, displayName }, s, data] = await Promise.all([loadHomeView(), getSnapshot(), getHouseholdData()]);
   const t = fr.dashboard;
   const greeting = displayName ? `${t.greeting}, ${displayName}` : t.greeting;
+  // Enregistrer un don : mode réel avec droit d'écriture seulement (sinon : consulter)
+  const canRecord = !isDemoMode && (await requireOnboardedSession()).canWrite;
+
+  // Préférence d'affichage (privée) : accessible aussi depuis le menu profil, même sans données
+  const analytic = v.presentation.layout === 'classic';
+  const displaySection = (
+    <section id="affichage" aria-label="Affichage de l’accueil" className="scroll-mt-6 mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-sm">
+      <span className="text-ink-muted">Affichage : {analytic ? 'analytique (indicateurs financiers d’abord)' : 'Islamic-first'}</span>
+      <ActionForm action={setHomeLayout} submitLabel={analytic ? 'Revenir à l’affichage Islamic-first' : 'Passer à l’affichage analytique'} variant="quiet" testId="form-affichage">
+        <input type="hidden" name="layout" value={analytic ? 'islamic_first' : 'classic'} />
+      </ActionForm>
+    </section>
+  );
 
   // Premier accueil : identité Amanah, possibilités et premières démarches, sans aucun chiffre
   if (v.isEmpty) {
@@ -32,13 +47,13 @@ export default async function DashboardPage() {
       <>
         <h1 className="sr-only">{greeting}</h1>
         <WelcomeHome religious={v.presentation.showReligiousData} greeting={greeting} />
+        {displaySection}
       </>
     );
   }
 
   const a = s.analysis;
   const categoryName = (slug: string) => categoryLabel(slug, data.categories);
-  const analytic = v.presentation.layout === 'classic';
 
   const blocks: Record<HomeBlockId, () => ReactNode> = {
     situation: () => (
@@ -49,7 +64,7 @@ export default async function DashboardPage() {
       const b = v.presentation.blocks.find((x) => x.id === 'commitments')!;
       return (
         <HomeSection key="commitments" id="engagements" title={b.title} href="/finance-islamique" linkLabel={b.variant === 'pedagogic' ? 'Découvrir' : 'Tout voir'} wide>
-          <CommitmentsBlock v={v} variant={b.variant} />
+          <CommitmentsBlock v={v} variant={b.variant} canRecord={canRecord} />
         </HomeSection>
       );
     },
@@ -66,12 +81,7 @@ export default async function DashboardPage() {
         {v.presentation.blocks.map((b) => blocks[b.id]())}
       </div>
 
-      <section aria-label="Affichage de l’accueil" className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 text-sm">
-        <span className="text-ink-muted">Affichage : {analytic ? 'analytique (indicateurs financiers d’abord)' : 'Islamic-first'}</span>
-        <ActionForm action={setHomeLayout} submitLabel={analytic ? 'Revenir à l’affichage Islamic-first' : 'Passer à l’affichage analytique'} variant="quiet" testId="form-affichage">
-          <input type="hidden" name="layout" value={analytic ? 'islamic_first' : 'classic'} />
-        </ActionForm>
-      </section>
+      {displaySection}
 
       {v.commitments ? <div className="mt-6"><Notice>{fr.zakat.disclaimer}</Notice></div> : null}
       <p className="mt-4 text-xs text-ink-muted">{RECOMMENDATION_NOTICE}</p>
