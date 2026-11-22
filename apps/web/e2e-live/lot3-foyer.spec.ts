@@ -116,7 +116,8 @@ test.describe.serial('Lot 3 — foyer à deux membres : engagements personnels e
     // Détail Purification en lecture seule : tout est consultable, aucune écriture proposée
     await pb.goto('/purification');
     await expect(pb.getByTestId('purification-lecture-seule')).toBeVisible();
-    await expect(pb.getByTestId('methodologie-actuelle')).toBeVisible();
+    // Le choix de méthodologie (ici : aucun) reste affiché, sans formulaire
+    await expect(pb.getByTestId('purification-lecture-seule')).toContainText('Méthodologie de calcul');
     for (const id of ['form-methodologie', 'form-detection', 'form-confirmer-purification', 'form-ecarter-purification', 'form-purification-realisee']) {
       await expect(pb.getByTestId(id)).toHaveCount(0);
     }
