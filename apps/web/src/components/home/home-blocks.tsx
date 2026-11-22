@@ -19,9 +19,9 @@ import { HomeActionList } from './home-action-list';
 
 const card = 'rounded-2xl border border-line bg-paper';
 
-export function HomeSection({ id, title, href, linkLabel, children }: { id: string; title: string; href?: string; linkLabel?: string; children: ReactNode }) {
+export function HomeSection({ id, title, href, linkLabel, wide = false, children }: { id: string; title: string; href?: string; linkLabel?: string; wide?: boolean; children: ReactNode }) {
   return (
-    <section aria-labelledby={`titre-${id}`} className="mt-7 first:mt-0" data-testid="bloc-accueil" data-block={id}>
+    <section aria-labelledby={`titre-${id}`} className={`min-w-0 ${wide ? 'lg:col-span-2' : ''}`} data-testid="bloc-accueil" data-block={id}>
       <SectionHeader id={`titre-${id}`} title={title} href={href} linkLabel={linkLabel} />
       {children}
     </section>
@@ -38,7 +38,7 @@ export function AmanahHero({ v, synthesis, analytic, categoryName, chart }: {
   const month = formatMonth(s.month);
   const cap = s.capacity;
   return (
-    <section aria-labelledby="titre-situation" className="pattern-khatam -mx-4 bg-primary-900 px-5 py-6 text-ivory sm:mx-0 sm:rounded-2xl md:px-7" data-testid="ma-situation" data-block="situation">
+    <section aria-labelledby="titre-situation" className="pattern-khatam -mx-4 bg-primary-900 px-5 py-6 text-ivory sm:mx-0 sm:rounded-2xl md:px-7 lg:col-span-2" data-testid="ma-situation" data-block="situation">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 id="titre-situation" className="text-xl font-semibold text-ivory">Mon Amanah</h2>
         <span className="text-xs text-primary-100">Ma situation financière</span>
@@ -187,15 +187,16 @@ export function ProjectsBlock({ v }: { v: HomeView }) {
 
 function SuggestionList({ suggestions }: { suggestions: readonly Suggestion[] }) {
   return (
-    <div data-testid="suggestions-accueil">
-      <h3 className="sr-only">Suggestions de projets</h3>
-      <ul className="space-y-2">
+    <div className="rounded-2xl bg-primary-50 px-4" data-testid="suggestions-accueil">
+      <h3 className="pt-3 font-sans text-xs font-semibold text-primary-700">Suggestions</h3>
+      <ul className="divide-y divide-primary-100">
         {suggestions.map((x) => (
-          <li key={x.id} className="rounded-2xl bg-primary-50 p-3" data-testid="suggestion-accueil">
-            <p className="text-xs font-semibold text-primary-700">Suggestion</p>
-            <p className="font-semibold">{x.title}</p>
+          <li key={x.id} className="py-3" data-testid="suggestion-accueil">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <span className="font-semibold">{x.title}</span>
+              <Link href={x.href} className="text-sm font-semibold text-primary-800 underline underline-offset-4">Préparer ce projet</Link>
+            </div>
             <p className="mt-0.5 text-xs text-ink-muted">{suggestionExplanation(x)}</p>
-            <Link href={x.href} className="mt-1 inline-block text-sm font-semibold text-primary-800 underline underline-offset-4">Préparer ce projet</Link>
           </li>
         ))}
       </ul>
@@ -206,15 +207,26 @@ function SuggestionList({ suggestions }: { suggestions: readonly Suggestion[] })
 // ---------------------------------------------------------------------------
 // 4. Mon calendrier Amanah
 // ---------------------------------------------------------------------------
+/** Nature de l'échéance, sans jamais présenter une estimation comme confirmée. */
+function eventNote(e: CalendarEvent): string {
+  if (e.indicative) return 'indicative';
+  if (e.source === 'goal') return 'échéance de projet';
+  if (e.source === 'user') return e.visibility === 'household' ? 'partagée avec le foyer' : 'personnelle';
+  if (e.source === 'confirmed_by_user') return 'confirmée par vous';
+  if (e.source === 'official_calendar') return 'calendrier officiel';
+  if (e.source === 'detected') return 'dépense annuelle détectée';
+  return '';
+}
+
 export function CalendarBlock({ events }: { events: readonly CalendarEvent[] }) {
   if (events.length === 0) return <p className="text-sm text-ink-muted">Aucune échéance à venir.</p>;
   return (
-    <ul className="grid grid-cols-2 gap-2.5 md:grid-cols-4" data-testid="calendrier-accueil">
+    <ul className="grid grid-cols-2 gap-2.5 md:grid-cols-4 lg:grid-cols-2" data-testid="calendrier-accueil">
       {events.map((e) => (
         <li key={e.id} className={`${card} p-3`} data-testid="echeance-accueil" data-type={e.type}>
           <p className="text-xs font-semibold text-accent-600">{formatDate(e.date)}</p>
           <p className="mt-0.5 break-words text-sm font-semibold">{e.label}</p>
-          <p className="text-xs text-ink-muted">{e.indicative ? 'indicative' : e.visibility === 'household' ? 'partagée avec le foyer' : 'confirmée'}</p>
+          <p className="text-xs text-ink-muted">{eventNote(e)}</p>
         </li>
       ))}
     </ul>
@@ -235,11 +247,11 @@ export function WealthBlock({ v }: { v: HomeView }) {
           <div className="flex h-2.5 overflow-hidden rounded-full" aria-hidden="true">
             {w.groups.map((g) => <div key={g.key} className={GROUP_COLOR[g.key]} style={{ width: `${g.permille / 10}%` }} />)}
           </div>
-          <ul className="grid grid-cols-1 gap-1.5 text-xs min-[360px]:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-1.5 text-xs min-[420px]:grid-cols-2">
             {w.groups.map((g) => (
               <li key={g.key} className="flex items-center gap-2" data-testid="groupe-patrimoine" data-group={g.key}>
                 <span aria-hidden="true" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-sm ${GROUP_COLOR[g.key]}`} />
-                <span>{g.label} <span className="tabular font-semibold">{Math.round(g.permille / 10)} %</span></span>
+                <span className="whitespace-nowrap">{g.label} <span className="tabular font-semibold">{Math.round(g.permille / 10)} %</span></span>
               </li>
             ))}
           </ul>

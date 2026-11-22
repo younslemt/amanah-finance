@@ -64,7 +64,7 @@ export default async function DashboardPage() {
     commitments: () => {
       const b = v.presentation.blocks.find((x) => x.id === 'commitments')!;
       return (
-        <HomeSection key="commitments" id="engagements" title={b.title} href="/finance-islamique" linkLabel={b.variant === 'pedagogic' ? 'Découvrir' : 'Tout voir'}>
+        <HomeSection key="commitments" id="engagements" title={b.title} href="/finance-islamique" linkLabel={b.variant === 'pedagogic' ? 'Découvrir' : 'Tout voir'} wide>
           <CommitmentsBlock v={v} variant={b.variant} />
         </HomeSection>
       );
@@ -72,13 +72,13 @@ export default async function DashboardPage() {
     projects: () => <HomeSection key="projects" id="projets" title="Mes projets de vie" href="/goals" linkLabel="Tous les projets"><ProjectsBlock v={v} /></HomeSection>,
     calendar: () => <HomeSection key="calendar" id="calendrier" title="Mon calendrier Amanah" href="/goals/calendrier" linkLabel="Calendrier"><CalendarBlock events={v.calendar} /></HomeSection>,
     wealth: () => <HomeSection key="wealth" id="patrimoine" title="Mon patrimoine et mes valeurs"><WealthBlock v={v} /></HomeSection>,
-    next_actions: () => <HomeSection key="next_actions" id="actions" title="Mes prochaines actions" href="/recommandations" linkLabel="Recommandations"><NextActionsBlock v={v} /></HomeSection>,
+    next_actions: () => <HomeSection key="next_actions" id="actions" title="Mes prochaines actions" href="/recommandations" linkLabel="Tout voir"><NextActionsBlock v={v} /></HomeSection>,
   };
 
   return (
     <>
       <h1 className="sr-only">{greeting}</h1>
-      <div data-testid="accueil" data-layout={v.presentation.layout} data-religious={v.presentation.showReligiousData ? 'yes' : 'no'}>
+      <div className="grid gap-y-7 lg:grid-cols-2 lg:gap-x-6" data-testid="accueil" data-layout={v.presentation.layout} data-religious={v.presentation.showReligiousData ? 'yes' : 'no'}>
         {v.presentation.blocks.map((b) => blocks[b.id]())}
       </div>
 

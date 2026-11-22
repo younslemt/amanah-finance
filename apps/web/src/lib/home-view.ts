@@ -104,7 +104,7 @@ const GROUP: Record<ZakatAssetKind, WealthGroup['key']> = {
   business_inventory: 'other', receivable: 'other', vehicle: 'other', other: 'other',
 };
 const GROUP_LABEL: Record<WealthGroup['key'], string> = {
-  liquid: 'Comptes et épargne', investments: 'Placements', metals: 'Or et métaux', real_estate: 'Immobilier', other: 'Autres actifs',
+  liquid: 'Comptes, épargne', investments: 'Placements', metals: 'Or et métaux', real_estate: 'Immobilier', other: 'Autres actifs',
 };
 
 const PRICE_REASONS = new Set(['nisab_price_unavailable', 'valuation_price_unavailable']);
