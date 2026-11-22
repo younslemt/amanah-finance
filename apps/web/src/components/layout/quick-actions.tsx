@@ -60,6 +60,15 @@ export function QuickActions({ actions, demo, variant }: { actions: readonly Qui
         ref={dialog} aria-labelledby={titleId} onClose={onClose} data-testid="panneau-actions-rapides"
         // Un clic sur le fond (hors du panneau) atteint l'élément <dialog> lui-même
         onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}
+        // Le dialogue modal rend la page inerte, mais Tab peut quitter le document : on boucle
+        onKeyDown={(e) => {
+          if (e.key !== 'Tab') return;
+          const items = [...e.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')];
+          const first = items[0], last = items.at(-1);
+          if (!first || !last) return;
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }}
         className={cn(
           'w-full max-w-none bg-transparent p-0 text-ink backdrop:bg-ink/45',
           'm-0 mt-auto max-h-[85dvh] md:m-auto md:max-w-md',

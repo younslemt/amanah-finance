@@ -215,6 +215,9 @@ test.describe.serial('Lot 3 — navigation, Mes engagements, actions rapides, me
     await withdraw.getByRole('button', { name: 'Retirer mon consentement' }).click();
     await expect(page).toHaveURL(/retrait=keep/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Finance islamique');
+    // Nouveau rendu serveur (le document précédent contient encore les données d'avant le retrait)
+    await page.goto('/finance-islamique');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Finance islamique');
     expect(await navLabels(page, isMobile)).toEqual(['Accueil', 'Finance islamique', 'Projets', 'Budget', 'Patrimoine']);
     await expect(page.getByTestId('sous-entree')).toHaveCount(0);
     const html = await page.content();

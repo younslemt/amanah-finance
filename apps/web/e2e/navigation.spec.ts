@@ -171,7 +171,8 @@ test('menu profil : accès secondaires de démonstration, clavier et fermeture',
   await expect(panel).toHaveCount(0);
   await expect(button).toBeFocused();
   await button.click();
-  await page.locator('main h1').click();
+  // Clic en dehors du menu (coin du contenu principal, hors du panneau)
+  await page.locator('#contenu').click({ position: { x: 4, y: 4 } });
   await expect(button).toHaveAttribute('aria-expanded', 'false');
   // Préférences d'affichage : la section de l'accueil
   await button.click();
