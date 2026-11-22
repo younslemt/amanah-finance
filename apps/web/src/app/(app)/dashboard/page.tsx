@@ -8,6 +8,8 @@ import { RECOMMENDATION_NOTICE } from '@/lib/recommendation-text';
 import { categoryLabel } from '@/lib/labels';
 import { fr } from '@/messages/fr';
 import { loadHomeView } from '@/lib/home-data';
+import { isDemoMode } from '@/lib/env';
+import { requireOnboardedSession } from '@/lib/supabase/session';
 import type { HomeBlockId } from '@/lib/presentation';
 import {
   AmanahHero, CalendarBlock, CommitmentsBlock, HomeSection, NextActionsBlock, ProjectsBlock, WealthBlock, WelcomeHome,
@@ -25,6 +27,8 @@ export default async function DashboardPage() {
   const [{ view: v, displayName }, s, data] = await Promise.all([loadHomeView(), getSnapshot(), getHouseholdData()]);
   const t = fr.dashboard;
   const greeting = displayName ? `${t.greeting}, ${displayName}` : t.greeting;
+  // Enregistrer un don : mode réel avec droit d'écriture seulement (sinon : consulter)
+  const canRecord = !isDemoMode && (await requireOnboardedSession()).canWrite;
 
   // Préférence d'affichage (privée) : accessible aussi depuis le menu profil, même sans données
   const analytic = v.presentation.layout === 'classic';
@@ -60,7 +64,7 @@ export default async function DashboardPage() {
       const b = v.presentation.blocks.find((x) => x.id === 'commitments')!;
       return (
         <HomeSection key="commitments" id="engagements" title={b.title} href="/finance-islamique" linkLabel={b.variant === 'pedagogic' ? 'Découvrir' : 'Tout voir'} wide>
-          <CommitmentsBlock v={v} variant={b.variant} />
+          <CommitmentsBlock v={v} variant={b.variant} canRecord={canRecord} />
         </HomeSection>
       );
     },

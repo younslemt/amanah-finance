@@ -134,3 +134,33 @@ maquettes « Engagements », « Actions rapides » et « Ordinateur ».
 
 Écarts restant ouverts : aucune provision virtuelle tant qu'un moteur ou une saisie ne l'alimente pas ;
 historique des calculs de Zakat non disponible en démonstration (rien n'y est enregistré).
+
+## 8. Corrections de la revue (validation conditionnelle)
+
+**Purification : engagements personnels.** Avec le partage religieux activé, la RLS (inchangée) rend
+visibles les éléments des autres membres consentants. Les synthèses ne comptent désormais que les
+éléments de la personne connectée :
+- « Mes engagements » : `buildEngagementsView` filtre sur `ownerId = userId` et indique le nombre
+  d'éléments partagés par d'autres (`sharedByOthersCount`), sans aucun de leurs montants ;
+- détail `/purification` : totaux calculés sur vos éléments ; les éléments partagés restent listés,
+  marqués « partagé par un membre du foyer », sans action possible ;
+- accueil : la synthèse du bloc « Mes engagements » lit les éléments de la personne (`owner_id`).
+Une future vue « engagements du foyer » pourra réutiliser `loadPurification` (tous les éléments visibles)
+et le même modèle sans filtre.
+
+**Actions selon les fonctionnalités disponibles** (`engagementsActions`) :
+
+| | Démonstration | Réel, écriture | Réel, lecture seule |
+|---|---|---|---|
+| Purification | Examiner les opérations fictives | Confirmer les montants à purifier | Consulter les opérations de purification |
+| Zakat | Consulter le calcul fictif | Compléter / Revoir le calcul | Consulter le calcul |
+| Historique des calculs | — | ✓ | ✓ |
+| Enregistrer un don / une contribution | — | ✓ | — |
+| Accueil, bloc Solidarité | Voir les dons | Enregistrer un don | Voir les dons |
+
+**Tests ajoutés** : SQL `purification_personal_scope.test.sql` (deux membres consentants, partage
+activé, montants différents : visibilité partagée, requête personnelle, aucune modification croisée,
+retrait du partage) ; unitaires (synthèse personnelle vue par chaque membre, libellés par contexte) ;
+mode réel `lot3-foyer.spec.ts` (foyer préparé par fixture SQL sur la base locale de CI : montants
+personnels dans Mes engagements, le détail et l'accueil, éléments partagés consultables, puis lecture
+seule : libellés de consultation, ni don, ni « + », ni import) ; démonstration (libellés de consultation).

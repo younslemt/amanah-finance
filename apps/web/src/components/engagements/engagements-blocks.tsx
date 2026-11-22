@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { formatCents, formatDate } from '@/lib/format';
-import type { EngagementsView } from '@/lib/engagements-view';
+import type { EngagementsActions, EngagementsView } from '@/lib/engagements-view';
 import { MethodBadge } from '@/components/home/method-badge';
 import { ZakatStatusList } from '@/components/home/zakat-status-list';
 
@@ -36,8 +36,8 @@ function Row({ label, hint, value, testId }: { label: string; hint?: string; val
 // ---------------------------------------------------------------------------
 // Zakat
 // ---------------------------------------------------------------------------
-/** `history` : l'historique des calculs n'existe qu'en mode réel (la démonstration n'enregistre rien). */
-export function ZakatEngagement({ z, canRecord, history }: { z: EngagementsView['zakat']; canRecord: boolean; history: boolean }) {
+/** Actions : `engagementsActions` (démonstration, écriture, lecture seule). */
+export function ZakatEngagement({ z, actions }: { z: EngagementsView['zakat']; actions: EngagementsActions }) {
   return (
     <Section id="zakat" title="Zakat" badge={<MethodBadge methodId="M-01, M-02" />} testId="engagement-zakat">
       <dl className="mb-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2" data-basis={z.basis} data-testid="zakat-dernier-calcul">
@@ -52,13 +52,13 @@ export function ZakatEngagement({ z, canRecord, history }: { z: EngagementsView[
       </dl>
       <ZakatStatusList view={z.view} lines={z.lines} title={null} />
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <Link href="/zakat" className={primary} data-testid="lien-calcul-zakat">{z.view.complete ? 'Revoir le calcul' : 'Compléter le calcul'}</Link>
-        {history ? (
+        <Link href={actions.zakat.href} className={primary} data-testid="lien-calcul-zakat">{actions.zakat.label}</Link>
+        {actions.zakatHistory ? (
           <Link href="/zakat#historique" className={quiet} data-testid="lien-historique-zakat">
             Historique des calculs{z.historyCount > 0 ? ` (${z.historyCount})` : ''}
           </Link>
         ) : null}
-        {canRecord ? <Link href="/dons" className={quiet}>Enregistrer une contribution</Link> : null}
+        {actions.recordContribution ? <Link href="/dons" className={quiet} data-testid="lien-contribution-zakat">Enregistrer une contribution</Link> : null}
       </div>
     </Section>
   );
@@ -67,7 +67,7 @@ export function ZakatEngagement({ z, canRecord, history }: { z: EngagementsView[
 // ---------------------------------------------------------------------------
 // Purification
 // ---------------------------------------------------------------------------
-export function PurificationEngagement({ p, canRecord }: { p: EngagementsView['purification']; canRecord: boolean }) {
+export function PurificationEngagement({ p, actions }: { p: EngagementsView['purification']; actions: EngagementsActions }) {
   const ops = p.detected.count === 0 ? 'Aucune opération en attente' : p.detected.count === 1 ? '1 opération en attente de votre décision' : `${p.detected.count} opérations en attente de votre décision`;
   return (
     <Section id="purification" title="Purification" badge={<MethodBadge methodId="M-03" />} testId="engagement-purification">
@@ -85,9 +85,14 @@ export function PurificationEngagement({ p, canRecord }: { p: EngagementsView['p
           value={p.toPurifyCents === null ? '—' : formatCents(p.toPurifyCents)} testId="purification-a-purifier" />
         {p.purifiedCents !== null && p.purifiedCents > 0 ? <Row label="Déjà purifié" value={formatCents(p.purifiedCents)} /> : null}
       </dl>
+      <p className="mt-1 text-xs text-ink-muted" data-testid="purification-perimetre" data-shared={p.sharedByOthersCount}>
+        Vos éléments uniquement.{p.sharedByOthersCount > 0
+          ? ` ${p.sharedByOthersCount === 1 ? '1 élément partagé' : `${p.sharedByOthersCount} éléments partagés`} par un membre du foyer : consultable(s) dans le détail, non compté(s) ici.`
+          : ''}
+      </p>
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <Link href="/purification" className={primary} data-testid="lien-confirmer-purification">Confirmer les montants à purifier</Link>
-        {canRecord ? <Link href="/dons" className={quiet} data-testid="lien-contribution-purification">Enregistrer ensuite votre don</Link> : null}
+        <Link href={actions.purification.href} className={primary} data-testid="lien-purification">{actions.purification.label}</Link>
+        {actions.recordContribution ? <Link href="/dons" className={quiet} data-testid="lien-contribution-purification">Enregistrer ensuite votre don</Link> : null}
       </div>
       <p className="mt-3 text-xs text-ink-muted" data-testid="purification-pas-un-transfert">
         Confirmer un montant enregistre votre choix : ce n’est pas un transfert. Le don se fait en dehors de l’application, puis s’enregistre dans « Dons ». Amanah Finance n’effectue aucun paiement.
@@ -99,7 +104,7 @@ export function PurificationEngagement({ p, canRecord }: { p: EngagementsView['p
 // ---------------------------------------------------------------------------
 // Solidarité
 // ---------------------------------------------------------------------------
-export function SolidarityEngagement({ s, canRecord }: { s: EngagementsView['solidarity']; canRecord: boolean }) {
+export function SolidarityEngagement({ s, actions }: { s: EngagementsView['solidarity']; actions: EngagementsActions }) {
   return (
     <Section id="solidarite" title="Solidarité" testId="engagement-solidarite">
       <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-primary-50 p-3" data-testid="solidarite-total" data-count={s.count}>
@@ -127,7 +132,7 @@ export function SolidarityEngagement({ s, canRecord }: { s: EngagementsView['sol
         <p className="mt-2 text-sm" data-testid="dernier-don">Dernière contribution : {s.latest.kindLabel}, {formatCents(s.latest.amountCents)} le {formatDate(s.latest.paidOn)}</p>
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        {canRecord ? <Link href="/dons" className={primary} data-testid="lien-enregistrer-don">Enregistrer un don</Link> : null}
+        {actions.recordContribution ? <Link href="/dons" className={primary} data-testid="lien-enregistrer-don">Enregistrer un don</Link> : null}
         <Link href="/dons" className={quiet}>Historique des dons</Link>
       </div>
     </Section>

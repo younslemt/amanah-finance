@@ -114,7 +114,8 @@ function SavingsBox({ v }: { v: HomeView }) {
 // ---------------------------------------------------------------------------
 // 2. Mes engagements / Finance islamique
 // ---------------------------------------------------------------------------
-export function CommitmentsBlock({ v, variant }: { v: HomeView; variant: HomeBlockVariant }) {
+/** `canRecord` : l'enregistrement d'un don n'existe qu'en mode réel avec droit d'écriture. */
+export function CommitmentsBlock({ v, variant, canRecord }: { v: HomeView; variant: HomeBlockVariant; canRecord: boolean }) {
   if (variant === 'pedagogic' || !v.commitments) return <IslamicFinanceIntro />;
   const { zakat, purification, solidarity } = v.commitments;
   const z = zakat.view;
@@ -166,7 +167,7 @@ export function CommitmentsBlock({ v, variant }: { v: HomeView; variant: HomeBlo
           <h3 className="font-sans text-sm font-semibold">Solidarité</h3>
           <p className="tabular mt-1 text-xl font-semibold">{formatCents(solidarity.totalCents)}</p>
           <p className="text-xs text-ink-muted">{solidarity.count === 0 ? `Aucun don enregistré en ${solidarity.year}` : `Dons enregistrés en ${solidarity.year}`}</p>
-          <Link href="/dons" className="mt-2 inline-block text-xs font-semibold text-primary-800 underline underline-offset-4">Enregistrer un don</Link>
+          <Link href="/dons" className="mt-2 inline-block text-xs font-semibold text-primary-800 underline underline-offset-4">{canRecord ? 'Enregistrer un don' : 'Voir les dons'}</Link>
         </article>
       </div>
     </div>

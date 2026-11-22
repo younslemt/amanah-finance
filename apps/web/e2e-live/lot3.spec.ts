@@ -130,6 +130,8 @@ test.describe.serial('Lot 3 — navigation, Mes engagements, actions rapides, me
     await expect(page.getByTestId('purification-detectees')).toContainText('Aucune opération en attente');
     await expect(page.getByTestId('purification-decisions')).toContainText('0 confirmée(s)');
     await expect(page.getByTestId('purification-pas-un-transfert')).toContainText('ce n’est pas un transfert');
+    await expect(page.getByTestId('lien-purification')).toHaveText('Confirmer les montants à purifier');
+    await expect(page.getByTestId('purification-perimetre')).toHaveAttribute('data-shared', '0');
     expect(cents(await page.getByTestId('solidarite-total').innerText())).toBe(0);
     await expect(page.getByTestId('lien-enregistrer-don')).toBeVisible();
     await expect(page.getByTestId('form-retrait-finance-islamique')).toBeVisible();

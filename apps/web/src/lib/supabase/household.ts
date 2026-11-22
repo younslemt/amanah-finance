@@ -56,7 +56,9 @@ export async function loadHouseholdData(asOf: string): Promise<HouseholdData> {
     supabase.from('market_prices').select('symbol, price_per_g_cents, as_of, source').eq('currency', 'EUR').order('as_of', { ascending: false }).limit(20),
     // Réglages Zakat : ceux de la personne connectée (migration 0011), visibles seulement avec le consentement article 9
     supabase.from('zakat_settings').select('nisab_basis, year_basis, hawl_date, options').eq('household_id', hid).eq('owner_id', auth.user.id).maybeSingle(),
-    supabase.from('purification_items').select('id, credited_cents, amount_to_purify_cents, status').eq('household_id', hid).limit(2000),
+    // Synthèse de l'accueil (« Mes engagements ») : éléments de la personne connectée seulement,
+    // même si d'autres membres partagent les leurs (consultables dans le détail Purification)
+    supabase.from('purification_items').select('id, credited_cents, amount_to_purify_cents, status').eq('household_id', hid).eq('owner_id', auth.user.id).limit(2000),
     // Sprint 3 : choix du foyer et décisions personnelles sur les recommandations
     supabase.from('household_category_settings').select('category_slug, nature').eq('household_id', hid),
     supabase.from('recurring_feedback').select('series_key').eq('household_id', hid),

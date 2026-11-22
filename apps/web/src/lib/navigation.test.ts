@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { activeChild, avatarInitial, isItemActive, mainNavigation, profileMenu } from './navigation.ts';
 import { availableQuickActions } from './quick-actions.ts';
-import { buildEngagementsView, type EngagementsInput } from './engagements-view.ts';
+import { buildEngagementsView, engagementsActions, type EngagementsInput } from './engagements-view.ts';
 import { zakatStatusView } from './zakat-status.ts';
 import type { ZakatCommitment } from './home-view.ts';
 import type { ContributionRow } from './contributions-view.ts';
@@ -110,12 +110,12 @@ describe('Mes engagements : modèle de vue', () => {
       c('m', 'sadaqah', 9_999, '2026-06-01', { owner_id: 'autre' }), // membre du foyer : pas mes engagements
     ],
     purification: { kind: 'items', items: [
-      { status: 'detected', creditedCents: 410, amountToPurifyCents: null },
-      { status: 'detected', creditedCents: 620, amountToPurifyCents: null },
-      { status: 'confirmed', creditedCents: 300, amountToPurifyCents: null },
-      { status: 'confirmed', creditedCents: 210, amountToPurifyCents: 250 },
-      { status: 'rejected', creditedCents: 100, amountToPurifyCents: null },
-      { status: 'purified', creditedCents: 200, amountToPurifyCents: 240 },
+      { status: 'detected', creditedCents: 410, amountToPurifyCents: null, ownerId: 'moi' },
+      { status: 'detected', creditedCents: 620, amountToPurifyCents: null, ownerId: 'moi' },
+      { status: 'confirmed', creditedCents: 300, amountToPurifyCents: null, ownerId: 'moi' },
+      { status: 'confirmed', creditedCents: 210, amountToPurifyCents: 250, ownerId: 'moi' },
+      { status: 'rejected', creditedCents: 100, amountToPurifyCents: null, ownerId: 'moi' },
+      { status: 'purified', creditedCents: 200, amountToPurifyCents: 240, ownerId: 'moi' },
     ] },
     ...p,
   });
@@ -144,11 +144,54 @@ describe('Mes engagements : modèle de vue', () => {
     expect(p.decisions).toEqual({ confirmed: 2, rejected: 1, purified: 1, total: 4 });
     expect(p.toPurifyCents).toBe(250);
     expect(p.purifiedCents).toBe(240);
+    expect(p.sharedByOthersCount).toBe(0);
+  });
+
+  it('foyer, deux membres consentants qui partagent : la synthèse ne compte que les éléments de la personne', () => {
+    // Éléments visibles par la RLS : ceux de « moi » et ceux partagés par « autre », montants différents
+    const items = [
+      { status: 'detected' as const, creditedCents: 370, amountToPurifyCents: null, ownerId: 'moi' },
+      { status: 'confirmed' as const, creditedCents: 500, amountToPurifyCents: 500, ownerId: 'moi' },
+      { status: 'detected' as const, creditedCents: 2_000, amountToPurifyCents: null, ownerId: 'autre' },
+      { status: 'confirmed' as const, creditedCents: 1_000, amountToPurifyCents: 1_000, ownerId: 'autre' },
+      { status: 'purified' as const, creditedCents: 800, amountToPurifyCents: 800, ownerId: 'autre' },
+    ];
+    const mine = buildEngagementsView(input({ userId: 'moi', purification: { kind: 'items', items } })).purification;
+    expect(mine).toEqual({
+      detected: { count: 1, creditedCents: 370 }, toReviewCents: 370, toDetermineCount: 0,
+      decisions: { confirmed: 1, rejected: 0, purified: 0, total: 1 }, toPurifyCents: 500, purifiedCents: 0, sharedByOthersCount: 3,
+    });
+    // Même ensemble vu par l'autre membre : ses propres montants seulement
+    const other = buildEngagementsView(input({ userId: 'autre', calculations: [], contributions: [], purification: { kind: 'items', items } })).purification;
+    expect(other.detected).toEqual({ count: 1, creditedCents: 2_000 });
+    expect(other.toPurifyCents).toBe(1_000);
+    expect(other.purifiedCents).toBe(800);
+    expect(other.sharedByOthersCount).toBe(2);
+    // Aucun montant de l'autre membre ne fuit dans la synthèse personnelle
+    expect(JSON.stringify(mine)).not.toMatch(/2000|1000|800/);
+  });
+
+  it('actions selon le contexte : démonstration, écriture, lecture seule', () => {
+    expect(engagementsActions('demo', true)).toEqual({
+      zakat: { label: 'Consulter le calcul fictif', href: '/zakat' }, zakatHistory: false,
+      purification: { label: 'Examiner les opérations fictives', href: '/purification' }, recordContribution: false,
+    });
+    expect(engagementsActions('write', false).zakat.label).toBe('Compléter le calcul');
+    expect(engagementsActions('write', true)).toMatchObject({
+      zakat: { label: 'Revoir le calcul' }, purification: { label: 'Confirmer les montants à purifier' }, recordContribution: true, zakatHistory: true,
+    });
+    const read = engagementsActions('read', false);
+    expect(read).toMatchObject({ zakat: { label: 'Consulter le calcul' }, purification: { label: 'Consulter les opérations de purification' }, recordContribution: false });
+    // Lecture seule et démonstration : aucun libellé d'action d'écriture
+    for (const a of [read, engagementsActions('demo', false)]) {
+      expect(`${a.zakat.label} ${a.purification.label}`).not.toMatch(/Confirmer|Compléter|Enregistrer|Revoir/);
+    }
+    for (const a of [read, engagementsActions('write', true)]) for (const href of [a.zakat.href, a.purification.href]) expect(routeExists(href)).toBe(true);
   });
 
   it('démonstration : opérations détectées seulement, aucune décision inventée', () => {
     const p = buildEngagementsView(input({ purification: { kind: 'candidates', count: 3, creditedCents: 1_240 } })).purification;
-    expect(p).toEqual({ detected: { count: 3, creditedCents: 1_240 }, toReviewCents: 1_240, toDetermineCount: 0, decisions: null, toPurifyCents: null, purifiedCents: null });
+    expect(p).toEqual({ detected: { count: 3, creditedCents: 1_240 }, toReviewCents: 1_240, toDetermineCount: 0, decisions: null, toPurifyCents: null, purifiedCents: null, sharedByOthersCount: 0 });
   });
 
   it('solidarité : contributions de la personne, comptées une fois, chaque type une seule fois', () => {

@@ -24,8 +24,12 @@ import type { ZakatCommitment } from './home-view.ts';
 import type { ZakatLine, ZakatStatusView } from './zakat-status.ts';
 
 export type PurificationSource =
-  /** Mode réel : éléments enregistrés (statuts et décisions de la personne ou partagés). */
-  | { kind: 'items'; items: ReadonlyArray<Pick<PurificationItem, 'status' | 'creditedCents' | 'amountToPurifyCents'>> }
+  /**
+   * Mode réel : éléments VISIBLES (RLS) avec leur propriétaire. Ceux d'autres membres apparaissent
+   * lorsque ces membres ont choisi de partager : ils restent consultables dans le détail, mais la
+   * synthèse « Mes engagements » ne compte que ceux de la personne connectée.
+   */
+  | { kind: 'items'; items: ReadonlyArray<Pick<PurificationItem, 'status' | 'creditedCents' | 'amountToPurifyCents'> & { ownerId: string }> }
   /** Démonstration : opérations détectées sur les relevés fictifs ; aucune décision enregistrable. */
   | { kind: 'candidates'; count: number; creditedCents: number };
 
@@ -62,6 +66,8 @@ export interface EngagementsView {
     /** Montant à purifier selon les choix de la personne (null : aucune décision enregistrable). */
     toPurifyCents: number | null;
     purifiedCents: number | null;
+    /** Éléments partagés par d'autres membres : visibles dans le détail, jamais comptés ici. */
+    sharedByOthersCount: number;
   };
   solidarity: {
     year: number;
@@ -108,8 +114,10 @@ export function buildEngagementsView(input: EngagementsInput): EngagementsView {
   // Purification
   let purification: EngagementsView['purification'];
   if (input.purification.kind === 'items') {
-    const items = input.purification.items;
-    const sum = summarizePurification(items.map((i, k) => ({ id: String(k), ...i })));
+    // Engagements PERSONNELS : seuls les éléments de la personne connectée sont comptés
+    const items = input.purification.items.filter((i) => i.ownerId === input.userId);
+    const sharedByOthersCount = input.purification.items.length - items.length;
+    const sum = summarizePurification(items.map((i, k) => ({ id: String(k), status: i.status, creditedCents: i.creditedCents, amountToPurifyCents: i.amountToPurifyCents })));
     const count = (st: PurificationItem['status']) => items.filter((i) => i.status === st).length;
     const decisions = { confirmed: count('confirmed'), rejected: count('rejected'), purified: count('purified'), total: 0 };
     decisions.total = decisions.confirmed + decisions.rejected + decisions.purified;
@@ -120,12 +128,13 @@ export function buildEngagementsView(input: EngagementsInput): EngagementsView {
       decisions,
       toPurifyCents: sum.toPurifyCents,
       purifiedCents: sum.purifiedCents,
+      sharedByOthersCount,
     };
   } else {
     const { count, creditedCents } = input.purification;
     purification = {
       detected: { count, creditedCents }, toReviewCents: creditedCents, toDetermineCount: 0,
-      decisions: null, toPurifyCents: null, purifiedCents: null,
+      decisions: null, toPurifyCents: null, purifiedCents: null, sharedByOthersCount: 0,
     };
   }
 
@@ -154,5 +163,47 @@ export function buildEngagementsView(input: EngagementsInput): EngagementsView {
     zakat: { view: z.view, lines, basis: z.basis, calculationAsOf: z.calculationAsOf, statusLabel: zakatStatusLabel(z), historyCount },
     purification,
     solidarity,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Actions de la page : uniquement celles réellement disponibles dans le contexte
+// ---------------------------------------------------------------------------
+
+/** Démonstration ; mode réel avec droit d'écriture ; mode réel en lecture seule. */
+export type EngagementsAccess = 'demo' | 'write' | 'read';
+
+export interface EngagementsActions {
+  zakat: { label: string; href: '/zakat' };
+  /** Historique des calculs : n'existe qu'en mode réel. */
+  zakatHistory: boolean;
+  purification: { label: string; href: '/purification' };
+  /** Enregistrer une contribution (Zakat, purification, don) : mode réel avec droit d'écriture. */
+  recordContribution: boolean;
+}
+
+/**
+ * Libellés d'action selon ce que l'écran cible permet réellement :
+ * - démonstration : écrans consultables, rien n'est enregistré ;
+ * - lecture seule : la RLS refuse toute écriture (religious_writable exige le droit d'écriture),
+ *   donc aucune action n'est présentée comme réalisable ;
+ * - écriture : actions complètes.
+ */
+export function engagementsActions(access: EngagementsAccess, zakatComplete: boolean): EngagementsActions {
+  if (access === 'demo') {
+    return {
+      zakat: { label: 'Consulter le calcul fictif', href: '/zakat' }, zakatHistory: false,
+      purification: { label: 'Examiner les opérations fictives', href: '/purification' }, recordContribution: false,
+    };
+  }
+  if (access === 'read') {
+    return {
+      zakat: { label: 'Consulter le calcul', href: '/zakat' }, zakatHistory: true,
+      purification: { label: 'Consulter les opérations de purification', href: '/purification' }, recordContribution: false,
+    };
+  }
+  return {
+    zakat: { label: zakatComplete ? 'Revoir le calcul' : 'Compléter le calcul', href: '/zakat' }, zakatHistory: true,
+    purification: { label: 'Confirmer les montants à purifier', href: '/purification' }, recordContribution: true,
   };
 }

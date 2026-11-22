@@ -70,6 +70,7 @@ test('Mes engagements : Zakat, purification et solidarité depuis les données e
   // Même montant restant que l'accueil : une seule source
   const remaining = await z.getByTestId('zakat-reste').innerText();
   await page.goto('/dashboard');
+  await expect(page.getByTestId('solidarite-accueil').getByRole('link')).toHaveText('Voir les dons');
   expect(cents(await page.getByTestId('zakat-accueil').getByTestId('zakat-reste').innerText())).toBe(cents(remaining));
   await page.goto('/finance-islamique');
 
@@ -79,6 +80,10 @@ test('Mes engagements : Zakat, purification et solidarité depuis les données e
   await expect(p.getByTestId('purification-decisions')).toContainText('Non enregistrables en démonstration');
   await expect(p.getByTestId('purification-pas-un-transfert')).toContainText('ce n’est pas un transfert');
   await expect(p.getByText(/virement effectué|paiement effectué/i)).toHaveCount(0);
+  // Démonstration : actions de consultation seulement, jamais présentées comme des écritures
+  await expect(p.getByTestId('lien-purification')).toHaveText('Examiner les opérations fictives');
+  await expect(z.getByTestId('lien-calcul-zakat')).toHaveText('Consulter le calcul fictif');
+  await expect(page.getByTestId('mes-engagements').getByRole('link', { name: /^(Confirmer|Compléter|Enregistrer|Revoir)/ })).toHaveCount(0);
 
   // Solidarité : total = somme des types (chaque contribution une fois), identique à l'écran Dons
   const s = page.getByTestId('engagement-solidarite');

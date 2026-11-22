@@ -205,6 +205,8 @@ jobs:
             echo "E2E_MAIL_URL=$MAIL"
             echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
             echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            # Fixtures SQL des tests (base locale jetable) ; jamais exposée au navigateur
+            echo "E2E_DB_URL=$DB_URL"
           } >> "$GITHUB_ENV"
           echo "API : $API_URL — boîte mail : $MAIL"
       - name: Compilation Next.js en mode réel

@@ -6,6 +6,7 @@ import { Checkbox, RadioGroup } from '@/components/forms/fields';
 import { isDemoMode } from '@/lib/env';
 import { religiousAccess, requireOnboardedSession } from '@/lib/supabase/session';
 import { loadEngagementsView } from '@/lib/engagements-data';
+import { engagementsActions } from '@/lib/engagements-view';
 import { IslamicFinanceIntro } from '@/components/home/consent-gate';
 import { PurificationEngagement, SolidarityEngagement, ZakatEngagement } from '@/components/engagements/engagements-blocks';
 import { latestConsent, LEGAL_DRAFT_NOTICE, RELIGIOUS_DOCUMENT } from '@/lib/legal/documents';
@@ -21,15 +22,16 @@ const NEXT = new Set(['/goals', '/zakat', '/zakat/al-fitr', '/purification', '/d
 
 /** Tableau de bord des engagements : Zakat, purification, solidarité (consentement en vigueur). */
 function Engagements({ data }: { data: NonNullable<Awaited<ReturnType<typeof loadEngagementsView>>> }) {
-  const { view, demo, canRecord } = data;
+  const { view, demo, access } = data;
+  const actions = engagementsActions(access, view.zakat.view.complete);
   return (
     <>
       <PageHeader title="Mes engagements" subtitle={`Zakat, purification et solidarité${demo ? ' · données fictives' : ''}`} />
       <Notice>Les méthodologies religieuses utilisées sont provisoires : ni fatwa ni certification. Les montants sont des estimations selon vos choix ; Amanah Finance n’effectue aucun paiement.</Notice>
       <div className="mt-4 grid gap-4 lg:grid-cols-2" data-testid="mes-engagements">
-        <div className="lg:col-span-2"><ZakatEngagement z={view.zakat} canRecord={canRecord} history={!demo} /></div>
-        <PurificationEngagement p={view.purification} canRecord={canRecord} />
-        <SolidarityEngagement s={view.solidarity} canRecord={canRecord} />
+        <div className="lg:col-span-2"><ZakatEngagement z={view.zakat} actions={actions} /></div>
+        <PurificationEngagement p={view.purification} actions={actions} />
+        <SolidarityEngagement s={view.solidarity} actions={actions} />
       </div>
       {demo ? (
         <p className="mt-4 text-sm text-ink-muted">En démonstration, les décisions de purification et l’enregistrement de dons ne sont pas disponibles. En mode réel, ces fonctions demandent un consentement explicite distinct (article 9 du RGPD).</p>
