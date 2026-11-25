@@ -66,6 +66,20 @@ test('cookie d’accès : httpOnly, SameSite=Lax, Secure derrière HTTPS', async
   expect(open.headers()['location']).toMatch(/\/dashboard$/);
 });
 
+/**
+ * Après une action, l'application rafraîchit la route en arrière-plan (données recalculées) :
+ * une navigation lancée au même instant peut être annulée. On attend la fin des échanges, puis
+ * on réessaie si WebKit signale encore une navigation interrompue.
+ */
+async function go(page: import('@playwright/test').Page, url: string) {
+  for (let i = 0; ; i++) {
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    try { await page.goto(url); return; } catch (e) {
+      if (i >= 2 || !/interrupted|cancelled|detached/i.test(String(e))) throw e;
+    }
+  }
+}
+
 test('parcours complet sur smartphone, conservé après rafraîchissement puis réinitialisé', async ({ page }, info) => {
   const thirdParty: string[] = [];
   page.on('request', (r) => { const u = new URL(r.url()); if (!['localhost', '127.0.0.1'].includes(u.hostname) && u.protocol.startsWith('http')) thirdParty.push(u.host); });
@@ -87,7 +101,7 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   await noOverflow(page, `engagements ${w}`);
 
   // Créer un objectif personnalisé (assistant en 3 étapes)
-  await page.goto('/goals/nouveau');
+  await go(page, '/goals/nouveau');
   const form = page.getByTestId('form-objectif');
   await form.getByRole('radio', { name: /^Projet personnel/ }).check();
   await form.getByLabel('Nom du projet').fill('Voyage fictif');
@@ -117,7 +131,7 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   await expect(page.getByTestId('historique-affectations')).toContainText(euros('200,00 €'));
 
   // Accepter une suggestion
-  await page.goto('/goals');
+  await go(page, '/goals');
   const sugg = page.getByTestId('suggestion').filter({ has: page.getByTestId('preparer-suggestion') }).first();
   const suggId = await sugg.getAttribute('data-suggestion');
   await sugg.getByTestId('preparer-suggestion').tap();
@@ -128,27 +142,27 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   await sform.getByLabel('Mensualité prévue (€)').fill('50');
   await sform.getByRole('button', { name: 'Créer l’objectif' }).tap();
   await expect(page).toHaveURL(/\?cree=1$/);
-  await page.goto('/goals');
+  await go(page, '/goals');
   await expect(page.locator(`[data-testid="suggestion"][data-suggestion="${suggId}"]`)).toHaveCount(0);
 
   // Calendrier, Zakat fictive, purification fictive
   for (const [path, heading] of [['/goals/calendrier', 'Calendrier financier familial'], ['/zakat', 'Zakat'], ['/purification', 'Purification']] as const) {
-    await page.goto(path);
+    await go(page, path);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
     await noOverflow(page, `${path} ${w}`);
   }
-  await page.goto('/finance-islamique');
+  await go(page, '/finance-islamique');
   await expect(page.getByTestId('lien-purification')).toHaveText('Examiner les opérations fictives');
 
   // Préférences
-  await page.goto('/goals/preferences');
+  await go(page, '/goals/preferences');
   const prefs = page.getByTestId('form-preferences');
   await prefs.getByRole('group', { name: 'Projets qui m’intéressent' }).getByLabel('Mariage').check();
   await prefs.getByRole('button', { name: 'Enregistrer mes préférences' }).tap();
   await expect(prefs.getByRole('status')).toContainText('recalculés');
 
   // Conservé après rafraîchissement (cookie de démonstration en production)
-  await page.goto(goal);
+  await go(page, goal);
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Voyage fictif');
   await expect(page.getByTestId('historique-affectations')).toContainText(euros('200,00 €'));
@@ -157,7 +171,7 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   for (const c of demoCookies) { expect(c.httpOnly).toBe(true); expect(c.sameSite).toBe('Lax'); }
 
   // Réinitialiser
-  await page.goto('/goals');
+  await go(page, '/goals');
   await page.getByText('Réinitialiser la démonstration').tap();
   await page.getByTestId('form-reinitialiser').getByRole('button').tap();
   await expect(page.getByTestId('form-reinitialiser').getByRole('status')).toContainText('réinitialisée');
@@ -165,7 +179,7 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   await expect(page.getByTestId('liste-projets')).not.toContainText('Voyage fictif');
 
   // Avis des testeurs : e-mail prérempli, aucune donnée bancaire demandée
-  await page.goto('/avis');
+  await go(page, '/avis');
   await expect(page.getByTestId('lien-envoyer-avis')).toHaveAttribute('href', /^mailto:avis%40example\.test\?/);
   await noOverflow(page, `avis ${w}`);
 
