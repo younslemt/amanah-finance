@@ -55,7 +55,7 @@ La configuration est dans `apps/web/netlify.toml`. Netlify détecte Next.js et i
    - **aucune** variable Supabase ni Enable Banking (la construction échouerait, volontairement).
 5. *Deploy*. À la fin, l’adresse est du type `https://<nom>.netlify.app`.
 6. Contrôles immédiats depuis un ordinateur :
-   - ouvrir l’adresse : la page « Accès réservé » doit s’afficher (sinon, **supprimez le site** et prévenez-moi) ;
+   - ouvrir l’adresse : la page « Démonstration privée » (mot de passe) doit s’afficher (sinon, **supprimez le site** et prévenez-moi) ;
    - un mauvais mot de passe est refusé ; le bon ouvre le tableau de bord avec la bannière « Démonstration ».
 7. Désactivez les *Deploy Previews* des pull requests si vous ne voulez pas d’adresses supplémentaires (elles sont protégées de la même façon, mais inutiles ici).
 8. Pour fermer la démonstration : changez le mot de passe (tous les accès tombent) ou supprimez le site.
