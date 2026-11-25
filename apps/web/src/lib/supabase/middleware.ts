@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '../env.ts';
-import { demoAccessAllowed, demoAccessConfig } from '../demo-access.ts';
+import { ACCESS_COOKIE, accessTokenValid, demoAccessAllowed, demoAccessConfig, demoAccessRequired, type DemoAccessConfig } from '../demo-access.ts';
 
 const PUBLIC_PATHS = ['/connexion', '/inscription', '/mot-de-passe-oublie', '/auth/callback', '/auth/signout', '/hors-ligne'];
 const GUEST_ONLY = ['/connexion', '/inscription', '/mot-de-passe-oublie'];
@@ -11,12 +11,29 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isDemoMode) {
-    // Démonstration privée : accès protégé par le serveur dès que DEMO_ACCESS_PASSWORD est défini
-    if (!demoAccessAllowed(request.headers.get('authorization'), demoAccessConfig(process.env))) {
-      return new NextResponse('Accès réservé : démonstration privée.', {
-        status: 401,
-        headers: { 'WWW-Authenticate': 'Basic realm="Amanah Finance - demonstration privee", charset="UTF-8"', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' },
-      });
+    // Démonstration privée : accès contrôlé PAR LE SERVEUR. Sur un hébergement (build Netlify ou
+    // DEMO_ACCESS_REQUIRED=true), l'absence de mot de passe valide ferme tout : jamais d'accès ouvert.
+    const noStore = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
+    let cfg: DemoAccessConfig | null = null;
+    try { cfg = demoAccessConfig(process.env); } catch { cfg = null; }
+    const required = demoAccessRequired(process.env, process.env.AMANAH_HOSTED_BUILD === 'true');
+    if (!cfg && (required || process.env.DEMO_ACCESS_PASSWORD)) {
+      return new NextResponse('Démonstration indisponible : protection d’accès non configurée.', { status: 503, headers: noStore });
+    }
+    if (cfg && !pathname.startsWith('/acces')) {
+      const ok = demoAccessAllowed(request.headers.get('authorization'), cfg)
+        || await accessTokenValid(request.cookies.get(ACCESS_COOKIE)?.value, cfg, Math.floor(Date.now() / 1000));
+      if (!ok) {
+        // Navigation d'un navigateur : page de saisie du mot de passe ; autre requête : 401, sans contenu
+        if (request.method === 'GET' && (request.headers.get('accept') ?? '').includes('text/html')) {
+          const url = request.nextUrl.clone();
+          url.pathname = '/acces';
+          url.search = '';
+          url.searchParams.set('suite', `${pathname}${request.nextUrl.search}`);
+          return NextResponse.redirect(url, { headers: noStore });
+        }
+        return new NextResponse('Accès réservé : démonstration privée.', { status: 401, headers: noStore });
+      }
     }
     // La démo n'a pas de comptes utilisateurs : les routes d'auth renvoient vers l'accueil.
     if (pathname.startsWith('/auth/')) return NextResponse.redirect(new URL('/dashboard', request.url));

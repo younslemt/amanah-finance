@@ -1,6 +1,15 @@
 import type { NextConfig } from 'next';
 
 const isDev = process.env.NODE_ENV !== 'production';
+
+// Hébergement public (Netlify fixe NETLIFY=true pendant la compilation) : uniquement la
+// démonstration, sans aucune variable Supabase. Toute autre configuration fait échouer le build.
+const hosted = process.env.NETLIFY === 'true' || process.env.DEMO_ACCESS_REQUIRED === 'true';
+if (hosted) {
+  if (process.env.NEXT_PUBLIC_APP_MODE !== 'demo') throw new Error('Hébergement public : NEXT_PUBLIC_APP_MODE doit valoir « demo ». Le mode réel n’est jamais déployé ici.');
+  const leaked = Object.keys(process.env).filter((k) => /SUPABASE|ENABLE_BANKING/i.test(k));
+  if (leaked.length) throw new Error(`Hébergement public : variables interdites présentes (${leaked.join(', ')}).`);
+}
 const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 // CSP : 'unsafe-inline' sur les scripts est temporaire (Sprint 1 : nonce via middleware).
@@ -28,6 +37,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Lu par le middleware : un build hébergé exige toujours le mot de passe d'accès (refus sinon)
+  env: { AMANAH_HOSTED_BUILD: hosted ? 'true' : 'false' },
   transpilePackages: ['@amanah/engines', '@amanah/banking'],
   async headers() {
     return [

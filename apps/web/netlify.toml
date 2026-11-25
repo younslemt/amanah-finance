@@ -1,0 +1,23 @@
+# Démonstration privée d'Amanah Finance sur Netlify (offre Free).
+# DONNÉES FICTIVES UNIQUEMENT : mode démo, aucune variable Supabase, aucune banque.
+# Le mot de passe d'accès (DEMO_ACCESS_PASSWORD) se règle dans l'interface Netlify, jamais ici.
+#
+# Projet Netlify : « Package directory » = apps/web (ce fichier), « Base directory » vide (racine du
+# dépôt, où se trouvent pnpm-workspace.yaml et pnpm-lock.yaml).
+
+[build]
+  command = "pnpm --filter @amanah/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_PUBLIC_APP_MODE = "demo"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Déploiements de prévisualisation et de branche : même protection, mêmes données fictives.
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_APP_MODE = "demo"
+[context.branch-deploy.environment]
+  NEXT_PUBLIC_APP_MODE = "demo"
+
+# L'adaptateur Next.js (OpenNext) est détecté et installé automatiquement par Netlify.
