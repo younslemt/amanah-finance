@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Abstraction des sources bancaires (démo, CSV, puis fournisseurs PSD2).",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./enable-banking": "./src/enable-banking.ts"
   },
   "scripts": {
     "test": "vitest run",
