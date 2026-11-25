@@ -20,7 +20,7 @@ export async function connectBank(_p: FormState, fd: FormData): Promise<FormStat
   const ctx = await allowed(); if ('status' in ctx) return ctx;
   const institutionId = String(fd.get('institutionId') ?? '');
   if (!/^(BE|FR|LU|NL):.{1,120}$/.test(institutionId)) return formError('Choisissez votre banque.', { institutionId: 'Choisissez votre banque.' });
-  if (fd.get('accord') !== 'on') return formError('Confirmez votre accord.', { accord: 'Votre accord explicite est nécessaire.' });
+  if (fd.get('accord') !== 'yes') return formError('Confirmez votre accord.', { accord: 'Votre accord explicite est nécessaire.' });
   let target: string;
   try {
     const r = await startConnection(ctx, institutionId);
