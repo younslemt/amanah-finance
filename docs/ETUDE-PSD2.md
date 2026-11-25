@@ -160,3 +160,7 @@ Aucun des deux fournisseurs recommandés ne publie aujourd'hui de prix complet. 
 - [Règlement délégué (UE) 2022/2360](https://lawplayer.com/eu/act/32022R2360) ; [EBA, rapport final (180 jours)](https://www.eba.europa.eu/publications-and-media/press-releases/eba-publishes-final-report-amendment-its-technical-standards)
 - [Parlement européen, accord PSR / PSD3](https://www.europarl.europa.eu/news/en/press-room/20251121IPR31540/payment-services-deal-more-protection-from-online-fraud-and-hidden-fees)
 - Sources tierces (hypothèses seulement) : [Finexer, tarifs Tink](https://blog.finexer.com/tink-pricing/)
+
+## 9. Mise à jour du 25 novembre 2026
+
+Connecteur livré en sandbox et conditions d'un test sur vos propres comptes : voir `docs/ENABLE-BANKING.md`. Architecture d'une future bêta : `docs/ARCHITECTURE-BETA.md`.

@@ -45,6 +45,7 @@ export function ActionForm({
   // React 19 vide le formulaire après chaque envoi : en cas d'erreur, la saisie est conservée
   // (envoi par onSubmit) ; elle n'est effacée qu'après un enregistrement réussi.
   useEffect(() => {
+    if (state.status === 'ok' && state.redirectTo && /^https?:\/\//.test(state.redirectTo)) { window.location.assign(state.redirectTo); return; }
     if (state.status === 'ok') { formRef.current?.reset(); notifyDataChanged(); if (wizard) setStep(0); }
     // Erreur serveur sur un champ : retour à l'étape qui le contient
     if (state.status === 'error' && wizard && state.fieldErrors) {

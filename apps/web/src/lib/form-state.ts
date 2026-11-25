@@ -5,6 +5,11 @@ export interface FormState {
   message?: string;
   /** Erreurs par champ, déjà traduites. */
   fieldErrors?: Record<string, string>;
+  /**
+   * Adresse externe à ouvrir après succès (redirection vers la banque). La navigation est faite
+   * par le navigateur : une redirection serveur vers une autre origine serait bloquée par la CSP.
+   */
+  redirectTo?: string;
 }
 
 export const initialFormState: FormState = { status: 'idle' };

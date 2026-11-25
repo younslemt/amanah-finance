@@ -216,6 +216,14 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
       - name: Démarrage en mode réel
         run: |
+          # Connecteur Enable Banking contre un serveur SIMULÉ (aucune banque réelle) : clé RSA jetable
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$RUNNER_TEMP/eb.pem" 2>/dev/null
+          openssl pkey -in "$RUNNER_TEMP/eb.pem" -pubout -out "$RUNNER_TEMP/eb.pub"
+          node apps/web/e2e-live/fake-enable-banking.mjs 4010 "$RUNNER_TEMP/eb.pub" app-ci-0001 > eb-mock.log 2>&1 &
+          echo "E2E_EB_MOCK_URL=http://localhost:4010" >> "$GITHUB_ENV"
+          ENABLE_BANKING_ENV=sandbox ENABLE_BANKING_APP_ID=app-ci-0001 \
+          ENABLE_BANKING_PRIVATE_KEY_B64="$(base64 -w0 "$RUNNER_TEMP/eb.pem")" \
+          ENABLE_BANKING_REDIRECT_URL=http://localhost:3000/api/banque/retour ENABLE_BANKING_API_URL=http://localhost:4010 \
           pnpm --filter @amanah/web start > start-live.log 2>&1 &
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/connexion || true)
@@ -231,6 +239,13 @@ jobs:
         run: pnpm --filter @amanah/web exec playwright test -c playwright.live.config.ts
         env:
           CI: 'true'
+      - name: Journaux sans donnée bancaire ni secret
+        run: |
+          # Le serveur ne journalise que des codes : ni IBAN, ni libellé, ni montant, ni jeton, ni clé
+          if grep -nE "BE71096123456769|BE10000000000404|SALAIRE EMPLOYEUR FICTIF|LOYER FICTIF|Bearer |PRIVATE KEY|sess-[0-9a-f]{12}" start-live.log; then
+            echo "Donnée sensible trouvée dans le journal du serveur"; exit 1
+          fi
+          echo "Journal du serveur : aucune donnée bancaire ni secret."
       - name: Journal du serveur en cas d'échec
         if: failure()
         run: tail -n 120 start-live.log || true

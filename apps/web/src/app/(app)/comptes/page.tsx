@@ -8,6 +8,8 @@ import { isDemoMode } from '@/lib/env';
 import { formatCents } from '@/lib/format';
 import { ACCOUNT_TYPE_LABELS } from '@/lib/labels';
 import { createAccount, setAccountReserve } from '../actions';
+import { requireOnboardedSession } from '@/lib/supabase/session';
+import { canUseBanking } from '@/lib/banking/bank-sync';
 
 export const metadata: Metadata = { title: 'Mes comptes' };
 
@@ -41,6 +43,14 @@ export default async function AccountsPage() {
           </ul>
         )}
       </Card>
+      {/* Connexion bancaire : uniquement en mode réel, pour les personnes autorisées (test restreint) */}
+      {!isDemoMode && canUseBanking(await requireOnboardedSession()) ? (
+        <Card className="mt-4">
+          <CardTitle>Connexion bancaire</CardTitle>
+          <p className="mb-3 text-sm text-ink-muted">Importez automatiquement soldes et opérations, en lecture seule, après autorisation chez votre banque.</p>
+          <Link href="/comptes/banque" className="inline-flex min-h-11 items-center rounded-lg bg-primary-700 px-4 text-sm font-semibold text-white" data-testid="lien-connecter-banque">Connecter une banque</Link>
+        </Card>
+      ) : null}
       <Card className="mt-4">
         <CardTitle>Ajouter un compte</CardTitle>
         {isDemoMode ? <Notice>Saisie disponible avec un compte réel.</Notice> : (
