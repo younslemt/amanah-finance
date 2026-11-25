@@ -19,6 +19,9 @@ async function connect(page: Page, choice: 'Autoriser l’accès' | 'Refuser') {
   await form.getByLabel('Votre banque').selectOption({ label: 'Mock ASPSP' });
   await form.getByRole('checkbox').check();
   await form.getByRole('button', { name: 'Continuer vers ma banque' }).click();
+  // En cas d'échec, le message affiché par le formulaire figure dans le rapport
+  await expect.poll(async () => page.url().startsWith(MOCK!) ? 'banque'
+    : (await form.getByRole('alert').textContent({ timeout: 200 }).catch(() => null)) ?? 'attente', { timeout: 15_000 }).toBe('banque');
   // Banque simulée : authentification forte chez la banque, aucun identifiant saisi dans Amanah
   await expect(page).toHaveURL(new RegExp(`^${MOCK!.replace(/[.]/g, '\\.')}/banque-simulee`));
   await page.getByRole('link', { name: choice }).click();

@@ -1,6 +1,5 @@
 'use server';
 import { cookies, headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { isDemoMode } from '@/lib/env';
 import { requireOnboardedSession } from '@/lib/supabase/session';
@@ -31,7 +30,8 @@ export async function connectBank(_p: FormState, fd: FormData): Promise<FormStat
   } catch {
     return formError('La banque n’a pas pu être contactée : réessayez dans quelques minutes.');
   }
-  redirect(target);
+  // Navigation effectuée par le navigateur (voir FormState.redirectTo)
+  return { status: 'ok', message: 'Redirection vers votre banque…', redirectTo: target };
 }
 
 export async function syncBank(_p: FormState, fd: FormData): Promise<FormState> {
