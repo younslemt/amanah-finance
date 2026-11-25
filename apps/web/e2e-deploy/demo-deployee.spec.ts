@@ -108,8 +108,9 @@ test('parcours complet sur smartphone, conservé après rafraîchissement puis r
   const sim = page.getByTestId('form-simuler');
   await sim.getByLabel('Scénario 1 (€/mois)').fill('100');
   await sim.getByLabel('Scénario 2 (€/mois)').fill('250');
+  await sim.getByLabel('Scénario 3 (€/mois)').fill('400');
   await sim.getByRole('button', { name: 'Comparer' }).tap();
-  await expect(page.getByTestId('scenario')).toHaveCount(2);
+  await expect(page.getByTestId('scenario')).toHaveCount(3);
   const alloc = page.getByTestId('form-allocation');
   await alloc.getByLabel('Montant (€)').fill('200');
   await alloc.getByRole('button', { name: 'Valider' }).tap();
