@@ -72,7 +72,7 @@ export function activeChild(item: Pick<NavItem, 'children'>, pathname: string): 
 // Menu profil
 // ---------------------------------------------------------------------------
 
-export interface ProfileMenuItem { id: 'accounts' | 'import' | 'recommendations' | 'settings' | 'display' | 'consents' | 'simulation'; label: string; href: string }
+export interface ProfileMenuItem { id: 'accounts' | 'import' | 'recommendations' | 'settings' | 'display' | 'consents' | 'simulation' | 'feedback'; label: string; href: string }
 
 export interface ProfileMenu { items: ProfileMenuItem[]; signOut: boolean }
 
@@ -95,6 +95,8 @@ export function profileMenu(ctx: { mode: 'demo' | 'real'; canWrite: boolean }): 
   items.push({ id: 'display', label: 'Préférences d’affichage', href: '/dashboard#affichage' });
   if (!demo) items.push({ id: 'consents', label: 'Consentements', href: '/parametres#consentements' });
   if (demo) items.push({ id: 'simulation', label: 'Date simulée', href: '/simulation' });
+  // Démonstration privée : recueil d'avis des testeurs (par e-mail, rien n'est stocké)
+  if (demo) items.push({ id: 'feedback', label: 'Donner mon avis', href: '/avis' });
   return { items, signOut: !demo };
 }
 

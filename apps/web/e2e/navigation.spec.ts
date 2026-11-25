@@ -166,7 +166,7 @@ test('menu profil : accès secondaires de démonstration, clavier et fermeture',
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   const panel = page.getByTestId('panneau-profil').filter({ visible: true });
   await expect(panel.getByRole('navigation', { name: 'Profil et paramètres' })).toBeVisible();
-  await expect(panel.getByTestId('lien-profil')).toHaveText(['Mes comptes', 'Importer un relevé', 'Mes recommandations', 'Préférences d’affichage', 'Date simulée']);
+  await expect(panel.getByTestId('lien-profil')).toHaveText(['Mes comptes', 'Importer un relevé', 'Mes recommandations', 'Préférences d’affichage', 'Date simulée', 'Donner mon avis']);
   // Démonstration : ni paramètres de compte, ni consentements, ni déconnexion
   await expect(panel.getByRole('button', { name: 'Se déconnecter' })).toHaveCount(0);
   for (const href of await panel.getByTestId('lien-profil').evaluateAll((as) => as.map((a) => a.getAttribute('href')!))) {

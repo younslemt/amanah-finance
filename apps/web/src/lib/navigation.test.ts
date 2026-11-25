@@ -59,7 +59,7 @@ describe('menu profil', () => {
   it('lecture seule : pas d’import ; démonstration : ni paramètres, ni consentements, ni déconnexion', () => {
     expect(ids(profileMenu({ mode: 'real', canWrite: false }))).not.toContain('import');
     const demo = profileMenu({ mode: 'demo', canWrite: false });
-    expect(ids(demo)).toEqual(['accounts', 'import', 'recommendations', 'display', 'simulation']);
+    expect(ids(demo)).toEqual(['accounts', 'import', 'recommendations', 'display', 'simulation', 'feedback']);
     expect(demo.signOut).toBe(false);
     for (const i of demo.items) expect(routeExists(i.href)).toBe(true);
   });
